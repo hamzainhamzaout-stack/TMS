@@ -1,0 +1,16 @@
+FROM golang:1.24 AS builder
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+RUN CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@v3.25.0
+
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates
+COPY --from=builder /go/bin/goose /usr/local/bin/
+COPY ./migrations /migrations
+
+WORKDIR /
+
+CMD ["goose", "-dir", "/migrations", "up"]

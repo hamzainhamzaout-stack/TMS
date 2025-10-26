@@ -1,0 +1,156 @@
+-- name: CreateUser :one
+INSERT INTO users(first_name, last_name, phone_number, password_hash, role_id)
+VALUES($1, $2, $3, $4, $5)
+RETURNING *;
+
+-- name: CreateRole :one
+INSERT INTO role(name)
+VALUES($1)
+RETURNING *;
+
+-- name: GetUserByPhoneNumber :one
+SELECT *
+FROM users
+WHERE phone_number = $1;
+
+-- name: GetOTPByUserID :one
+SELECT * FROM otps
+WHERE user_id = $1 AND status = 'active'
+ORDER BY created_at DESC
+LIMIT 1;
+
+-- name: UpdateUserStatus :one
+UPDATE users
+SET status = 'active'
+WHERE id = $1
+RETURNING *;
+
+-- name: UpdateUserPassword :exec
+UPDATE users
+SET password_hash = $1, status='active', updated_at = NOW()
+WHERE id = $2;
+
+-- name: BlacklistToken :exec
+INSERT INTO blacklisted_tokens (token) VALUES ($1);
+
+-- name: CreateOTP :one
+INSERT INTO otps (user_id, otp_hash, expires_at, delivery_method)
+VALUES ($1, $2, $3, $4)
+RETURNING *;
+
+-- name: UpdateOTPStatus :exec
+UPDATE otps
+SET status = $1
+WHERE id = $2;
+
+-- name: InvalidateActiveOTPsForUser :exec
+UPDATE otps
+SET status = 'expired'
+WHERE user_id = $1 AND status = 'active';
+
+-- name: GetMyRole :one
+SELECT
+  r.id,
+  r.name
+FROM users u
+JOIN role r ON u.role_id = r.id
+WHERE u.id = $1;
+
+-- name: GetRoles :many
+SELECT
+  r.id,
+  r.name
+FROM role r;
+
+-- name: UpdateRole :one
+UPDATE role
+SET name = $2
+WHERE id = $1
+RETURNING *;
+
+-- name: DeleteRole :exec
+DELETE FROM role
+WHERE id = $1;
+
+-- name: CreateDriver :one
+INSERT INTO driver(first_name, last_name, phone_number, license_number)
+VALUES($1, $2, $3, $4)
+RETURNING *;
+
+-- name: UpdateDriver :one
+UPDATE driver
+SET first_name = $2, last_name = $3, phone_number = $4, license_number = $5
+WHERE id = $1
+RETURNING *;
+
+-- name: DeleteDriver :exec
+UPDATE driver
+SET status = 'inactive'
+WHERE id = $1;
+
+-- name: ListDrivers :many
+SELECT *
+FROM driver;
+
+-- name: ListCars :many
+SELECT *
+FROM cars;
+
+-- name: CreateCar :one
+INSERT INTO cars(current_driver_id, license_plate, make, model, year, color, vin, fuel_type, transmission, mileage, status)
+VALUES( $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING *;
+
+-- name: UpdateCar :one
+UPDATE cars
+SET current_driver_id = $2, license_plate = $3, make = $4, model = $5, year = $6, color = $7, vin = $8, fuel_type = $9, transmission = $10, mileage = $11, status = $12
+WHERE id = $1
+RETURNING *;
+
+-- name: UpdateCarStatus :one
+UPDATE cars
+SET status = $1
+WHERE id = $2
+RETURNING *;
+
+-- name: DeleteCar :exec
+UPDATE cars
+SET status = 'inactive'
+WHERE id = $1;
+
+-- name: ChangeCarDriver :exec
+UPDATE cars
+SET current_driver_id = $1
+WHERE id = $2
+RETURNING *;
+
+-- name: CreateTrip :exec
+INSERT INTO trip(driver_id, total_cost, approved_by, created_at, updated_at)
+VALUES($1, $2, $3, $4, $5)
+RETURNING *;
+
+-- name: GetTrips :many
+SELECT *
+FROM trip;
+
+-- name: GetTripsByDriver :many
+SELECT *
+FROM trip
+WHERE driver_id = $1;
+
+-- name: UpdateTripDriver :one
+UPDATE trip
+SET driver_id = $2
+WHERE id = $1
+RETURNING *;
+
+-- name: UpdateTrip :one
+UPDATE trip
+SET total_cost = $2, approved_by = $3, created_at = $4, updated_at = $5
+WHERE id = $1
+RETURNING *;
+
+-- name: DeleteTrip :exec
+UPDATE trip
+SET isActive = false
+WHERE id = $1;
