@@ -156,6 +156,11 @@ type Driver struct {
 	UpdatedAt     pgtype.Timestamp `json:"updated_at"`
 }
 
+type Expense struct {
+	ID   int32  `json:"id"`
+	Name string `json:"name"`
+}
+
 type Otp struct {
 	ID             int32            `json:"id"`
 	UserID         uuid.UUID        `json:"user_id"`
@@ -180,6 +185,11 @@ type Trip struct {
 	Isactive   bool             `json:"isactive"`
 	CreatedAt  pgtype.Timestamp `json:"created_at"`
 	UpdatedAt  pgtype.Timestamp `json:"updated_at"`
+}
+
+type TripExpense struct {
+	TripID     int32 `json:"trip_id"`
+	ExpensesID int32 `json:"expenses_id"`
 }
 
 type User struct {

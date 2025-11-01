@@ -79,7 +79,12 @@ RETURNING *;
 
 -- name: UpdateDriver :one
 UPDATE driver
-SET first_name = $2, last_name = $3, phone_number = $4, license_number = $5
+SET
+  first_name    = COALESCE($2, first_name),
+  last_name     = COALESCE($3, last_name),
+  phone_number  = COALESCE($4, phone_number),
+  license_number= COALESCE($5, license_number),
+  updated_at    = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING *;
 
@@ -91,6 +96,11 @@ WHERE id = $1;
 -- name: ListDrivers :many
 SELECT *
 FROM driver;
+
+-- name: GetDriverByID :one
+SELECT *
+FROM driver
+WHERE id = $1;
 
 -- name: ListCars :many
 SELECT *
@@ -124,10 +134,14 @@ SET current_driver_id = $1
 WHERE id = $2
 RETURNING *;
 
--- name: CreateTrip :exec
-INSERT INTO trip(driver_id, total_cost, approved_by, created_at, updated_at)
-VALUES($1, $2, $3, $4, $5)
+-- name: CreateTrip :one
+INSERT INTO trip(driver_id, total_cost, approved_by)
+VALUES($1, $2, $3)
 RETURNING *;
+
+-- name: AddExpensesToTrip :exec
+INSERT INTO trip_expenses(trip_id, expenses_id)
+VALUES($1, $2);
 
 -- name: GetTrips :many
 SELECT *
@@ -154,3 +168,9 @@ RETURNING *;
 UPDATE trip
 SET isActive = false
 WHERE id = $1;
+
+
+-- name: CreateExpenseType :one
+INSERT INTO expenses(name)
+VALUES($1)
+RETURNING *;

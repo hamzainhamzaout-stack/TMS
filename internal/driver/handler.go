@@ -2,6 +2,7 @@ package driver
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -56,19 +57,25 @@ func (h *DriverHandler) ListDrivers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DriverHandler) UpdateDriver(w http.ResponseWriter, r *http.Request) {
-	var driverData domain.Driver
-	if err := json.NewDecoder(r.Body).Decode(&driverData); err != nil {
+	var req domain.Driver
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
 		return
 	}
-	driver, err := h.service.UpdateDriverStatus(r.Context(), &driverData)
+
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	updated, err := h.service.UpdateDriverStatus(r.Context(), int32(id), &req)
 	if err != nil {
 		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
 		return
 	}
-	data := map[string]string{
-		"driver": driver.FirstName,
-	}
+
+	data := map[string]string{"driver": updated.FirstName}
 	responses.SuccessJSONResponse("updated successfully", data, http.StatusOK, w)
 }
 
@@ -179,7 +186,16 @@ func (h *DriverHandler) ChangeCarDriver(w http.ResponseWriter, r *http.Request) 
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
 		return
 	}
-	if err := h.service.ChangeCarDriver(r.Context(), &changeDriver); err != nil {
+	carID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	if changeDriver.CurrentDriverID == nil {
+		responses.ErrorJSONResponse(errors.New("current_driver_id is required"), http.StatusBadRequest, w, nil)
+		return
+	}
+	if err := h.service.ChangeCarDriver(r.Context(), *changeDriver.CurrentDriverID, int32(carID)); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
 		return
 	}
@@ -196,12 +212,12 @@ func (h *DriverHandler) ListTrips(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
-	var tripData dm_svc_db.CreateTripParams
+	var tripData domain.CreateTripParams
 	if err := json.NewDecoder(r.Body).Decode(&tripData); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
 		return
 	}
-	if err := h.service.CreateTrip(r.Context(), &tripData); err != nil {
+	if err := h.service.CreateTrip(r.Context(), tripData); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
 		return
 	}
