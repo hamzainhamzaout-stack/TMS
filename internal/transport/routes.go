@@ -24,6 +24,7 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 	router.Route("/admin", func(adminRoute chi.Router) {
 		adminRoute.Route("/user", func(r chi.Router) {
 			r.Post("/", di.AuthHandler.CreateUserHandler)
+			r.Post("/set-password", di.AuthHandler.ResetPasswordHandler)
 		})
 		adminRoute.Route("/role", func(r chi.Router) {
 			r.Get("/", di.AuthHandler.GetRolesHandler)

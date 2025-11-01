@@ -2,11 +2,15 @@ package driver
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
+	"strconv"
 
 	"github.com/Robotech-Org/driver-management/internal/config"
 	"github.com/Robotech-Org/driver-management/internal/data/dm_svc_db"
 	"github.com/Robotech-Org/driver-management/internal/domain"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type DriverService struct {
@@ -25,22 +29,49 @@ func NewDriverService(logger *slog.Logger, queries dm_svc_db.Queries, cfg config
 
 func (s *DriverService) CreateDriver(ctx context.Context, driver *domain.Driver) (dm_svc_db.Driver, error) {
 	s.logger.Info("Creating driver", "driver", driver)
-	return s.queries.CreateDriver(ctx, dm_svc_db.CreateDriverParams{
+	driverData, err := s.queries.CreateDriver(ctx, dm_svc_db.CreateDriverParams{
 		FirstName:     driver.FirstName,
 		LastName:      driver.LastName,
 		PhoneNumber:   driver.PhoneNumber,
 		LicenseNumber: driver.Licenses,
 	})
+	if err != nil {
+		return dm_svc_db.Driver{}, errors.New("error creating driver")
+	}
+	return dm_svc_db.Driver{
+		FirstName:     driverData.FirstName,
+		LastName:      driverData.LastName,
+		LicenseNumber: driverData.LicenseNumber,
+		PhoneNumber:   driverData.PhoneNumber,
+	}, nil
 }
 
-func (s *DriverService) UpdateDriverStatus(ctx context.Context, driver *domain.Driver) (dm_svc_db.Driver, error) {
-	s.logger.Info("Updating driver status", "driver", driver)
+func (s *DriverService) UpdateDriverStatus(ctx context.Context, driverID int32, req *domain.Driver) (dm_svc_db.Driver, error) {
+	s.logger.Info("Updating driver status", "driver", req.LastName)
+	existing, err := s.queries.GetDriverByID(ctx, driverID)
+	if err != nil {
+		return dm_svc_db.Driver{}, err
+	}
+
+	if req.FirstName != "" {
+		existing.FirstName = req.FirstName
+	}
+	if req.LastName != "" {
+		existing.LastName = req.LastName
+	}
+	if req.PhoneNumber != "" {
+		existing.PhoneNumber = req.PhoneNumber
+	}
+	if req.Licenses != "" {
+		existing.LicenseNumber = req.Licenses
+	}
+
 	return s.queries.UpdateDriver(ctx, dm_svc_db.UpdateDriverParams{
-		ID:            int32(driver.ID),
-		FirstName:     driver.FirstName,
-		LastName:      driver.LastName,
-		PhoneNumber:   driver.PhoneNumber,
-		LicenseNumber: driver.Licenses,
+		ID:            existing.ID,
+		FirstName:     existing.FirstName,
+		LastName:      existing.LastName,
+		PhoneNumber:   existing.PhoneNumber,
+		LicenseNumber: existing.LicenseNumber,
 	})
 }
 
@@ -96,14 +127,40 @@ func (s *DriverService) DeleteCar(ctx context.Context, carID int32) error {
 	return s.queries.DeleteCar(ctx, carID)
 }
 
-func (s *DriverService) ChangeCarDriver(ctx context.Context, changeDriver *dm_svc_db.ChangeCarDriverParams) error {
-	s.logger.Info("Changing car driver", "changeDriver", changeDriver)
-	return s.queries.ChangeCarDriver(ctx, *changeDriver)
+func (s *DriverService) ChangeCarDriver(ctx context.Context, driverID int32, carID int32) error {
+	s.logger.Info("Changing car driver", "driverID", driverID)
+	return s.queries.ChangeCarDriver(ctx, dm_svc_db.ChangeCarDriverParams{
+		CurrentDriverID: &driverID,
+		ID:              carID,
+	})
 }
 
-func (s *DriverService) CreateTrip(ctx context.Context, trip *dm_svc_db.CreateTripParams) error {
+func (s *DriverService) CreateTrip(ctx context.Context, trip domain.CreateTripParams) error {
 	s.logger.Info("Creating trip", "trip", trip)
-	return s.queries.CreateTrip(ctx, *trip)
+
+	totalCost := pgtype.Numeric{}
+	if err := totalCost.Scan(strconv.FormatFloat(trip.TotalCost, 'f', 2, 64)); err != nil {
+		return fmt.Errorf("failed to convert total_cost: %w", err)
+	}
+	tripReturning, err := s.queries.CreateTrip(ctx, dm_svc_db.CreateTripParams{
+		DriverID:   trip.DriverID,
+		TotalCost:  totalCost,
+		ApprovedBy: trip.ApprovedBy,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create trip: %w", err)
+	}
+
+	for _, expense := range trip.ExpenseIDs {
+		if err := s.queries.AddExpensesToTrip(ctx, dm_svc_db.AddExpensesToTripParams{
+			TripID:     tripReturning.ID,
+			ExpensesID: expense,
+		}); err != nil {
+			return fmt.Errorf("failed to add expense: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (s *DriverService) ListTrips(ctx context.Context) ([]dm_svc_db.Trip, error) {

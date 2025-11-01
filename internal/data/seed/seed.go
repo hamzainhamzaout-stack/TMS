@@ -2,6 +2,7 @@ package seed
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 
@@ -56,6 +57,28 @@ func SeedAdmin(ctx context.Context, cfg config.Config, roleID int32) (uuid.UUID,
 	return uuid.UUID{}, fmt.Errorf("create admin: %w", err)
 }
 
+func SeedExpenses(ctx context.Context, cfg config.Config) error {
+	expenses := []dm_svc_db.Expense{
+		{
+			Name: "Food",
+		},
+		{
+			Name: "Transport",
+		},
+	}
+
+	for _, expense := range expenses {
+		_, err := cfg.Queries.CreateExpenseType(ctx, expense.Name)
+		if err != nil {
+			log.Printf("Error creating expense: %v", err)
+			return fmt.Errorf("create expense: %w", err)
+		}
+	}
+
+	fmt.Println("Expenses seeded successfully!")
+	return nil
+}
+
 func UpdateAdminStatus(ctx context.Context, cfg config.Config, userID uuid.UUID) error {
 	userNew, err := cfg.Queries.UpdateUserStatus(ctx, userID)
 	if err != nil {
@@ -68,17 +91,22 @@ func UpdateAdminStatus(ctx context.Context, cfg config.Config, userID uuid.UUID)
 func RunAll(ctx context.Context, cfg config.Config) error {
 	roleID, err := SeedRole(ctx, cfg, "fleet_manager")
 	if err != nil {
-		return err
+		return errors.New("error seeding fleet manager role")
 	}
 
 	adminID, err := SeedAdmin(ctx, cfg, *roleID)
 	if err != nil {
-		return err
+		return errors.New("error seeding admin")
 	}
 
 	err = UpdateAdminStatus(ctx, cfg, adminID)
 	if err != nil {
-		return err
+		return errors.New("error updating admin status")
+	}
+
+	err = SeedExpenses(ctx, cfg)
+	if err != nil {
+		return errors.New("error seeding expenses")
 	}
 
 	return nil

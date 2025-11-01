@@ -13,6 +13,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addExpensesToTrip = `-- name: AddExpensesToTrip :exec
+INSERT INTO trip_expenses(trip_id, expenses_id)
+VALUES($1, $2)
+`
+
+type AddExpensesToTripParams struct {
+	TripID     int32 `json:"trip_id"`
+	ExpensesID int32 `json:"expenses_id"`
+}
+
+func (q *Queries) AddExpensesToTrip(ctx context.Context, arg AddExpensesToTripParams) error {
+	_, err := q.db.Exec(ctx, addExpensesToTrip, arg.TripID, arg.ExpensesID)
+	return err
+}
+
 const blacklistToken = `-- name: BlacklistToken :exec
 INSERT INTO blacklisted_tokens (token) VALUES ($1)
 `
@@ -127,6 +142,19 @@ func (q *Queries) CreateDriver(ctx context.Context, arg CreateDriverParams) (Dri
 	return i, err
 }
 
+const createExpenseType = `-- name: CreateExpenseType :one
+INSERT INTO expenses(name)
+VALUES($1)
+RETURNING id, name
+`
+
+func (q *Queries) CreateExpenseType(ctx context.Context, name string) (Expense, error) {
+	row := q.db.QueryRow(ctx, createExpenseType, name)
+	var i Expense
+	err := row.Scan(&i.ID, &i.Name)
+	return i, err
+}
+
 const createOTP = `-- name: CreateOTP :one
 INSERT INTO otps (user_id, otp_hash, expires_at, delivery_method)
 VALUES ($1, $2, $3, $4)
@@ -174,29 +202,31 @@ func (q *Queries) CreateRole(ctx context.Context, name string) (Role, error) {
 	return i, err
 }
 
-const createTrip = `-- name: CreateTrip :exec
-INSERT INTO trip(driver_id, total_cost, approved_by, created_at, updated_at)
-VALUES($1, $2, $3, $4, $5)
+const createTrip = `-- name: CreateTrip :one
+INSERT INTO trip(driver_id, total_cost, approved_by)
+VALUES($1, $2, $3)
 RETURNING id, driver_id, total_cost, approved_by, isactive, created_at, updated_at
 `
 
 type CreateTripParams struct {
-	DriverID   int32            `json:"driver_id"`
-	TotalCost  pgtype.Numeric   `json:"total_cost"`
-	ApprovedBy uuid.UUID        `json:"approved_by"`
-	CreatedAt  pgtype.Timestamp `json:"created_at"`
-	UpdatedAt  pgtype.Timestamp `json:"updated_at"`
+	DriverID   int32          `json:"driver_id"`
+	TotalCost  pgtype.Numeric `json:"total_cost"`
+	ApprovedBy uuid.UUID      `json:"approved_by"`
 }
 
-func (q *Queries) CreateTrip(ctx context.Context, arg CreateTripParams) error {
-	_, err := q.db.Exec(ctx, createTrip,
-		arg.DriverID,
-		arg.TotalCost,
-		arg.ApprovedBy,
-		arg.CreatedAt,
-		arg.UpdatedAt,
+func (q *Queries) CreateTrip(ctx context.Context, arg CreateTripParams) (Trip, error) {
+	row := q.db.QueryRow(ctx, createTrip, arg.DriverID, arg.TotalCost, arg.ApprovedBy)
+	var i Trip
+	err := row.Scan(
+		&i.ID,
+		&i.DriverID,
+		&i.TotalCost,
+		&i.ApprovedBy,
+		&i.Isactive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
-	return err
+	return i, err
 }
 
 const createUser = `-- name: CreateUser :one
@@ -277,6 +307,28 @@ WHERE id = $1
 func (q *Queries) DeleteTrip(ctx context.Context, id int32) error {
 	_, err := q.db.Exec(ctx, deleteTrip, id)
 	return err
+}
+
+const getDriverByID = `-- name: GetDriverByID :one
+SELECT id, first_name, last_name, phone_number, license_number, status, created_at, updated_at
+FROM driver
+WHERE id = $1
+`
+
+func (q *Queries) GetDriverByID(ctx context.Context, id int32) (Driver, error) {
+	row := q.db.QueryRow(ctx, getDriverByID, id)
+	var i Driver
+	err := row.Scan(
+		&i.ID,
+		&i.FirstName,
+		&i.LastName,
+		&i.PhoneNumber,
+		&i.LicenseNumber,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getMyRole = `-- name: GetMyRole :one
@@ -613,7 +665,12 @@ func (q *Queries) UpdateCarStatus(ctx context.Context, arg UpdateCarStatusParams
 
 const updateDriver = `-- name: UpdateDriver :one
 UPDATE driver
-SET first_name = $2, last_name = $3, phone_number = $4, license_number = $5
+SET
+  first_name    = COALESCE($2, first_name),
+  last_name     = COALESCE($3, last_name),
+  phone_number  = COALESCE($4, phone_number),
+  license_number= COALESCE($5, license_number),
+  updated_at    = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING id, first_name, last_name, phone_number, license_number, status, created_at, updated_at
 `

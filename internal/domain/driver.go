@@ -2,10 +2,10 @@ package domain
 
 type Driver struct {
 	ID          int64  `json:"id"`
-	FirstName   string `json:"first_name"`
-	LastName    string `json:"last_name"`
-	PhoneNumber string `json:"phone_number"`
-	Licenses    string `json:"licenses"`
+	FirstName   string `json:"first_name,omitempty"`
+	LastName    string `json:"last_name,omitempty"`
+	PhoneNumber string `json:"phone_number,omitempty"`
+	Licenses    string `json:"license_number,omitempty"`
 	Status      string `json:"status"`
 }
 
@@ -17,3 +17,10 @@ const (
 	Maintenance CarStatus = "maintenance"
 	Inactive    CarStatus = "inactive"
 )
+
+type UpdateDriverRequest struct {
+	FirstName     *string `json:"first_name,omitempty"`
+	LastName      *string `json:"last_name,omitempty"`
+	PhoneNumber   *string `json:"phone_number,omitempty"`
+	LicenseNumber *string `json:"license_number,omitempty"`
+}
