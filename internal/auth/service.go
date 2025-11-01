@@ -61,6 +61,7 @@ func (as *AuthService) Login(ctx context.Context, phoneNumber, plainTextPassword
 		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(plainTextPassword)); err != nil {
 			return "", "", "", fmt.Errorf("invalid credentials")
 		}
+		log.Printf("User: %v", user)
 
 		roles, err := as.queries.GetMyRole(ctx, user.ID)
 		if err != nil {
