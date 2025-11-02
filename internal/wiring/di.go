@@ -19,6 +19,6 @@ func NewDependencyContainer(cfg config.Config) *DependencyContainer {
 	driverSvc := driver.NewDriverService(cfg.Logger, *dbQueries, cfg)
 	return &DependencyContainer{
 		AuthHandler:   auth.NewAuthHandler(cfg.Logger, *authSvc),
-		DriverHandler: driver.NewDriverHandler(cfg.Logger, *driverSvc),
+		DriverHandler: driver.NewDriverHandler(cfg.Logger, *driverSvc, cfg.CLOUDINARY),
 	}
 }

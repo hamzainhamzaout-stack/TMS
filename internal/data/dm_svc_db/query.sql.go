@@ -205,7 +205,7 @@ func (q *Queries) CreateRole(ctx context.Context, name string) (Role, error) {
 const createTrip = `-- name: CreateTrip :one
 INSERT INTO trip(driver_id, total_cost, approved_by)
 VALUES($1, $2, $3)
-RETURNING id, driver_id, total_cost, approved_by, isactive, created_at, updated_at
+RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at
 `
 
 type CreateTripParams struct {
@@ -221,6 +221,7 @@ func (q *Queries) CreateTrip(ctx context.Context, arg CreateTripParams) (Trip, e
 		&i.ID,
 		&i.DriverID,
 		&i.TotalCost,
+		&i.ReceiptUrl,
 		&i.ApprovedBy,
 		&i.Isactive,
 		&i.CreatedAt,
@@ -397,8 +398,42 @@ func (q *Queries) GetRoles(ctx context.Context) ([]Role, error) {
 	return items, nil
 }
 
+const getTripDetail = `-- name: GetTripDetail :one
+SELECT t.id, t.driver_id, t.total_cost, t.approved_by, t.created_at, t.updated_at, d.first_name AS driver_first_name, d.last_name AS driver_last_name
+FROM trip t
+JOIN driver d ON t.driver_id = d.id
+WHERE t.id = $1
+`
+
+type GetTripDetailRow struct {
+	ID              int32            `json:"id"`
+	DriverID        int32            `json:"driver_id"`
+	TotalCost       pgtype.Numeric   `json:"total_cost"`
+	ApprovedBy      uuid.UUID        `json:"approved_by"`
+	CreatedAt       pgtype.Timestamp `json:"created_at"`
+	UpdatedAt       pgtype.Timestamp `json:"updated_at"`
+	DriverFirstName string           `json:"driver_first_name"`
+	DriverLastName  string           `json:"driver_last_name"`
+}
+
+func (q *Queries) GetTripDetail(ctx context.Context, id int32) (GetTripDetailRow, error) {
+	row := q.db.QueryRow(ctx, getTripDetail, id)
+	var i GetTripDetailRow
+	err := row.Scan(
+		&i.ID,
+		&i.DriverID,
+		&i.TotalCost,
+		&i.ApprovedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DriverFirstName,
+		&i.DriverLastName,
+	)
+	return i, err
+}
+
 const getTrips = `-- name: GetTrips :many
-SELECT id, driver_id, total_cost, approved_by, isactive, created_at, updated_at
+SELECT id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at
 FROM trip
 `
 
@@ -415,6 +450,7 @@ func (q *Queries) GetTrips(ctx context.Context) ([]Trip, error) {
 			&i.ID,
 			&i.DriverID,
 			&i.TotalCost,
+			&i.ReceiptUrl,
 			&i.ApprovedBy,
 			&i.Isactive,
 			&i.CreatedAt,
@@ -431,7 +467,7 @@ func (q *Queries) GetTrips(ctx context.Context) ([]Trip, error) {
 }
 
 const getTripsByDriver = `-- name: GetTripsByDriver :many
-SELECT id, driver_id, total_cost, approved_by, isactive, created_at, updated_at
+SELECT id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at
 FROM trip
 WHERE driver_id = $1
 `
@@ -449,6 +485,7 @@ func (q *Queries) GetTripsByDriver(ctx context.Context, driverID int32) ([]Trip,
 			&i.ID,
 			&i.DriverID,
 			&i.TotalCost,
+			&i.ReceiptUrl,
 			&i.ApprovedBy,
 			&i.Isactive,
 			&i.CreatedAt,
@@ -485,6 +522,41 @@ func (q *Queries) GetUserByPhoneNumber(ctx context.Context, phoneNumber string) 
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getUsers = `-- name: GetUsers :many
+SELECT id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at
+FROM users
+`
+
+func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
+	rows, err := q.db.Query(ctx, getUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.PasswordHash,
+			&i.PhoneNumber,
+			&i.RoleID,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const invalidateActiveOTPsForUser = `-- name: InvalidateActiveOTPsForUser :exec
@@ -744,7 +816,7 @@ const updateTrip = `-- name: UpdateTrip :one
 UPDATE trip
 SET total_cost = $2, approved_by = $3, created_at = $4, updated_at = $5
 WHERE id = $1
-RETURNING id, driver_id, total_cost, approved_by, isactive, created_at, updated_at
+RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at
 `
 
 type UpdateTripParams struct {
@@ -768,6 +840,7 @@ func (q *Queries) UpdateTrip(ctx context.Context, arg UpdateTripParams) (Trip, e
 		&i.ID,
 		&i.DriverID,
 		&i.TotalCost,
+		&i.ReceiptUrl,
 		&i.ApprovedBy,
 		&i.Isactive,
 		&i.CreatedAt,
@@ -780,7 +853,7 @@ const updateTripDriver = `-- name: UpdateTripDriver :one
 UPDATE trip
 SET driver_id = $2
 WHERE id = $1
-RETURNING id, driver_id, total_cost, approved_by, isactive, created_at, updated_at
+RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at
 `
 
 type UpdateTripDriverParams struct {
@@ -795,12 +868,29 @@ func (q *Queries) UpdateTripDriver(ctx context.Context, arg UpdateTripDriverPara
 		&i.ID,
 		&i.DriverID,
 		&i.TotalCost,
+		&i.ReceiptUrl,
 		&i.ApprovedBy,
 		&i.Isactive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const updateTripReceiptURL = `-- name: UpdateTripReceiptURL :exec
+UPDATE trip
+SET receipt_url = $2
+WHERE id = $1
+`
+
+type UpdateTripReceiptURLParams struct {
+	ID         int32   `json:"id"`
+	ReceiptUrl *string `json:"receipt_url"`
+}
+
+func (q *Queries) UpdateTripReceiptURL(ctx context.Context, arg UpdateTripReceiptURLParams) error {
+	_, err := q.db.Exec(ctx, updateTripReceiptURL, arg.ID, arg.ReceiptUrl)
+	return err
 }
 
 const updateUserPassword = `-- name: UpdateUserPassword :exec

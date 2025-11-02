@@ -357,3 +357,14 @@ func (ah *AuthHandler) DeleteRoleHandler(w http.ResponseWriter, r *http.Request)
 
 	responses.SuccessJSONResponse("Role deleted successfully", nil, http.StatusOK, w)
 }
+
+func (ah *AuthHandler) GetUsersHandler(w http.ResponseWriter, r *http.Request) {
+	users, err := ah.service.GetUsersService(r.Context())
+	if err != nil {
+		ah.logger.Error("Failed to get users", "error", err)
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	responses.SuccessJSONResponse("Users retrieved successfully", users, http.StatusOK, w)
+}

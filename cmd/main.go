@@ -12,6 +12,7 @@ import (
 	"github.com/Robotech-Org/driver-management/internal/data/seed"
 	"github.com/Robotech-Org/driver-management/internal/transport"
 	"github.com/Robotech-Org/driver-management/internal/wiring"
+	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
@@ -42,6 +43,24 @@ func main() {
 		panic("SECRET_KEY not set")
 	}
 
+	cloudName := os.Getenv("CLOUDINARY_CLOUD_NAME")
+	if cloudName == "" {
+		panic("CLOUDINARY_CLOUD_NAME not set")
+	}
+	apiKey := os.Getenv("CLOUDINARY_API_KEY")
+	if apiKey == "" {
+		panic("CLOUDINARY_API_KEY not set")
+	}
+	apiSecret := os.Getenv("CLOUDINARY_API_SECRET")
+	if apiSecret == "" {
+		panic("CLOUDINARY_API_SECRET not set")
+	}
+
+	cld, err := cloudinary.NewFromParams(cloudName, apiKey, apiSecret)
+	if err != nil {
+		panic("Cloudinary initialization failed")
+	}
+
 	pool, err := pgxpool.New(basectx, dbDsn)
 	if err != nil {
 		panic("DB connection failed, err:" + err.Error())
@@ -61,6 +80,7 @@ func main() {
 		ServerPort: serverPort,
 		Queries:    *queries,
 		SECRETKEY:  secretKey,
+		CLOUDINARY: cld,
 	}
 
 	di := wiring.NewDependencyContainer(config)

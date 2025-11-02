@@ -3,6 +3,7 @@ package transport
 import (
 	"net/http"
 
+	"github.com/Robotech-Org/driver-management/internal/auth"
 	"github.com/Robotech-Org/driver-management/internal/wiring"
 	"github.com/Robotech-Org/driver-management/utils/responses"
 	"github.com/go-chi/chi/v5"
@@ -31,12 +32,14 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 	router.Group(func(r chi.Router) {
 		r.Post("/login", di.AuthHandler.Login)
 		r.Post("/logout", di.AuthHandler.LogoutHandler)
+		r.Post("/set-password", di.AuthHandler.ResetPasswordHandler)
 	})
 
 	router.Route("/admin", func(adminRoute chi.Router) {
+		adminRoute.Use(auth.AuthMiddleware)
 		adminRoute.Route("/user", func(r chi.Router) {
 			r.Post("/", di.AuthHandler.CreateUserHandler)
-			r.Post("/set-password", di.AuthHandler.ResetPasswordHandler)
+			r.Get("/list", di.AuthHandler.GetUsersHandler)
 		})
 		adminRoute.Route("/role", func(r chi.Router) {
 			r.Get("/", di.AuthHandler.GetRolesHandler)
@@ -55,14 +58,27 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 			r.Post("/", di.DriverHandler.CreateCar)
 			r.Patch("/{id}", di.DriverHandler.UpdateCar)
 			r.Delete("/{id}", di.DriverHandler.DeleteCar)
-			r.Patch("/{id}", di.DriverHandler.ChangeCarDriver)
+			r.Patch("/{id}/driver", di.DriverHandler.ChangeCarDriver)
 		})
 		adminRoute.Route("/trip", func(r chi.Router) {
 			r.Get("/", di.DriverHandler.ListTrips)
 			r.Post("/", di.DriverHandler.CreateTrip)
+			r.Get("/{id}", di.DriverHandler.TripDetail)
 			r.Patch("/{id}", di.DriverHandler.UpdateTrip)
 			r.Delete("/{id}", di.DriverHandler.DeleteTrip)
 		})
+	})
+
+	router.Route("/finance", func(financeRoute chi.Router) {
+		// financeRoute.Use(auth.AuthMiddleware)
+		// What I want the finance manager to do is
+		// 1. Get Trips with their expenses
+		financeRoute.Route("/trip", func(r chi.Router) {
+			r.Get("/", di.DriverHandler.ListTrips)
+			r.Get("/{id}", di.DriverHandler.TripDetail)
+			r.Post("/{id}/upload-receipt", di.DriverHandler.UploadReceipt)
+		})
+		// 2. Store payments made
 	})
 
 	router.Route("/user", func(userRoute chi.Router) {

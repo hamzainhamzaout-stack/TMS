@@ -13,6 +13,10 @@ SELECT *
 FROM users
 WHERE phone_number = $1;
 
+-- name: GetUsers :many
+SELECT *
+FROM users;
+
 -- name: GetOTPByUserID :one
 SELECT * FROM otps
 WHERE user_id = $1 AND status = 'active'
@@ -169,8 +173,19 @@ UPDATE trip
 SET isActive = false
 WHERE id = $1;
 
+-- name: UpdateTripReceiptURL :exec
+UPDATE trip
+SET receipt_url = $2
+WHERE id = $1;
+
 
 -- name: CreateExpenseType :one
 INSERT INTO expenses(name)
 VALUES($1)
 RETURNING *;
+
+-- name: GetTripDetail :one
+SELECT t.id, t.driver_id, t.total_cost, t.approved_by, t.created_at, t.updated_at, d.first_name AS driver_first_name, d.last_name AS driver_last_name
+FROM trip t
+JOIN driver d ON t.driver_id = d.id
+WHERE t.id = $1;

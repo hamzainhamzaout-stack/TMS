@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	"github.com/Robotech-Org/driver-management/internal/data/dm_svc_db"
+	"github.com/cloudinary/cloudinary-go/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -14,6 +15,7 @@ type Config struct {
 	ServerPort string
 	Queries    dm_svc_db.Queries
 	SECRETKEY  string
+	CLOUDINARY *cloudinary.Cloudinary
 }
 
 func Load() (*Config, error) {

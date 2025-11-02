@@ -181,6 +181,7 @@ type Trip struct {
 	ID         int32            `json:"id"`
 	DriverID   int32            `json:"driver_id"`
 	TotalCost  pgtype.Numeric   `json:"total_cost"`
+	ReceiptUrl *string          `json:"receipt_url"`
 	ApprovedBy uuid.UUID        `json:"approved_by"`
 	Isactive   bool             `json:"isactive"`
 	CreatedAt  pgtype.Timestamp `json:"created_at"`
