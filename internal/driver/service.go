@@ -182,3 +182,18 @@ func (s *DriverService) ChangeTripDriver(ctx context.Context, changeDriver *dm_s
 	s.logger.Info("Changing trip driver", "changeDriver", changeDriver)
 	return s.queries.UpdateTripDriver(ctx, *changeDriver)
 }
+
+func (s *DriverService) GetTripDetailService(ctx context.Context, tripID int32) (dm_svc_db.GetTripDetailRow, error) {
+	s.logger.Info("Getting trip detail", "tripID", tripID)
+	return s.queries.GetTripDetail(ctx, tripID)
+}
+
+func (s *DriverService) UploadReceiptService(ctx context.Context, tripID int32, receiptURL string) error {
+	// TODO: Implement image upload to a cloud storage provider like Cloudinary or S3.
+	// The `receiptURL` parameter will be the URL returned by the storage provider.
+
+	return s.queries.UpdateTripReceiptURL(ctx, dm_svc_db.UpdateTripReceiptURLParams{
+		ID:         tripID,
+		ReceiptUrl: &receiptURL,
+	})
+}

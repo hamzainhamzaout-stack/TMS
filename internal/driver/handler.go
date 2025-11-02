@@ -7,21 +7,27 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Robotech-Org/driver-management/internal/auth"
 	"github.com/Robotech-Org/driver-management/internal/data/dm_svc_db"
 	"github.com/Robotech-Org/driver-management/internal/domain"
 	"github.com/Robotech-Org/driver-management/utils/responses"
+	"github.com/cloudinary/cloudinary-go/v2"
+	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 type DriverHandler struct {
-	logger  *slog.Logger
-	service DriverService
+	logger     *slog.Logger
+	service    DriverService
+	cloudinary *cloudinary.Cloudinary
 }
 
-func NewDriverHandler(logger *slog.Logger, service DriverService) *DriverHandler {
+func NewDriverHandler(logger *slog.Logger, service DriverService, cloudinary *cloudinary.Cloudinary) *DriverHandler {
 	return &DriverHandler{
-		logger:  logger,
-		service: service,
+		logger:     logger,
+		service:    service,
+		cloudinary: cloudinary,
 	}
 }
 
@@ -212,10 +218,30 @@ func (h *DriverHandler) ListTrips(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
-	var tripData domain.CreateTripParams
-	if err := json.NewDecoder(r.Body).Decode(&tripData); err != nil {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		responses.ErrorJSONResponse(errors.New("authentication required"), http.StatusUnauthorized, w, nil)
+		return
+	}
+	var req struct {
+		DriverID   int32   `json:"driver_id"`
+		TotalCost  float64 `json:"total_cost"`
+		ExpenseIDs []int32 `json:"expenses"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
 		return
+	}
+	approvedBy, err := uuid.Parse(userID)
+	if err != nil {
+		responses.ErrorJSONResponse(errors.New("invalid user ID in token"), http.StatusInternalServerError, w, nil)
+		return
+	}
+	tripData := domain.CreateTripParams{
+		DriverID:   req.DriverID,
+		TotalCost:  req.TotalCost,
+		ExpenseIDs: req.ExpenseIDs,
+		ApprovedBy: approvedBy,
 	}
 	if err := h.service.CreateTrip(r.Context(), tripData); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
@@ -265,4 +291,71 @@ func (h *DriverHandler) ChangeTripDriver(w http.ResponseWriter, r *http.Request)
 	}
 
 	responses.SuccessJSONResponse("changed successfully", trip, http.StatusOK, w)
+}
+
+func (h *DriverHandler) TripDetail(w http.ResponseWriter, r *http.Request) {
+
+	tripID, err := strconv.Atoi(chi.URLParam(r, "id"))
+
+	if err != nil {
+
+		h.logger.Error("Failed to parse trip ID", "error", err)
+
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+
+		return
+
+	}
+
+	trip, err := h.service.GetTripDetailService(r.Context(), int32(tripID))
+
+	if err != nil {
+
+		h.logger.Error("Failed to get trip detail", "error", err)
+
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+
+		return
+
+	}
+
+	responses.SuccessJSONResponse("Trip detail retrieved successfully", trip, http.StatusOK, w)
+
+}
+
+func (h *DriverHandler) UploadReceipt(w http.ResponseWriter, r *http.Request) {
+
+	h.logger.Info("Uploading receipt")
+
+	tripID, err := strconv.Atoi(chi.URLParam(r, "id"))
+
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	file, header, err := r.FormFile("receipt")
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	defer file.Close()
+
+	h.logger.Info("File uploaded successfully", "filename", header.Filename, "size", header.Size)
+
+	uploadResult, err := h.cloudinary.Upload.Upload(r.Context(), file, uploader.UploadParams{})
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+	receiptURL := uploadResult.SecureURL
+	if err := h.service.UploadReceiptService(r.Context(), int32(tripID), receiptURL); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+	responses.SuccessJSONResponse("receipt uploaded successfully", nil, http.StatusOK, w)
 }

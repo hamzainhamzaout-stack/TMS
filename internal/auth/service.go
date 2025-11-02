@@ -285,24 +285,10 @@ func (as *AuthService) UpdateRoleService(ctx context.Context, roleData domain.Ro
 	return role.Name, nil
 }
 
-func (as *AuthService) DeleteRoleService(ctx context.Context, roleID int32) error {
-	as.logger.Info("DeleteRoleService service started")
-	tx, err := as.config.DB.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
+func (s *AuthService) DeleteRoleService(ctx context.Context, roleID int32) error {
+	return s.queries.DeleteRole(ctx, roleID)
+}
 
-	qtx := as.queries.WithTx(tx)
-
-	err = qtx.DeleteRole(ctx, roleID)
-	if err != nil {
-		return err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return err
-	}
-
-	return nil
+func (s *AuthService) GetUsersService(ctx context.Context) ([]dm_svc_db.User, error) {
+	return s.queries.GetUsers(ctx)
 }
