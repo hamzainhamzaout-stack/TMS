@@ -6,10 +6,22 @@ import (
 	"github.com/Robotech-Org/driver-management/internal/wiring"
 	"github.com/Robotech-Org/driver-management/utils/responses"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 )
 
 func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 	router := chi.NewRouter()
+
+	cors := cors.New(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	})
+
+	router.Use(cors.Handler)
 
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		message := "healthy"
