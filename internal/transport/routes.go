@@ -14,7 +14,7 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 	router := chi.NewRouter()
 
 	cors := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
