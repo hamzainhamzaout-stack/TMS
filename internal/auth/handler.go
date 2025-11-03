@@ -141,6 +141,10 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 					Secure:   true,
 					SameSite: http.SameSiteNoneMode,
 				})
+				responses.SuccessJSONResponse("Successfully authenticated", map[string]string{
+					"access_token":  accessToken,
+					"refresh_token": refreshToken,
+				}, http.StatusOK, w)
 			}
 			ah.logger.Info("Cookies set for development environment with SameSite=None")
 
