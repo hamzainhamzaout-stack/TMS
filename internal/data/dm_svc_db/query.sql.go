@@ -332,6 +332,31 @@ func (q *Queries) GetDriverByID(ctx context.Context, id int32) (Driver, error) {
 	return i, err
 }
 
+const getExpenseTypes = `-- name: GetExpenseTypes :many
+SELECT id, name
+FROM expenses
+`
+
+func (q *Queries) GetExpenseTypes(ctx context.Context) ([]Expense, error) {
+	rows, err := q.db.Query(ctx, getExpenseTypes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Expense
+	for rows.Next() {
+		var i Expense
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getMyRole = `-- name: GetMyRole :one
 SELECT
   r.id,

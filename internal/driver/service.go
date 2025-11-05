@@ -197,3 +197,13 @@ func (s *DriverService) UploadReceiptService(ctx context.Context, tripID int32, 
 		ReceiptUrl: &receiptURL,
 	})
 }
+
+func (s *DriverService) GetExpenseTypesService(ctx context.Context) ([]dm_svc_db.Expense, error) {
+	s.logger.Info("Getting expense types")
+	return s.queries.GetExpenseTypes(ctx)
+}
+
+func (s *DriverService) CreateExpenseService(ctx context.Context, name string) (dm_svc_db.Expense, error) {
+	s.logger.Info("Creating expense", "expense", name)
+	return s.queries.CreateExpenseType(ctx, name)
+}
