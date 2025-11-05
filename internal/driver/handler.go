@@ -359,3 +359,40 @@ func (h *DriverHandler) UploadReceipt(w http.ResponseWriter, r *http.Request) {
 	}
 	responses.SuccessJSONResponse("receipt uploaded successfully", nil, http.StatusOK, w)
 }
+
+func (h *DriverHandler) GetExpenseTypes(w http.ResponseWriter, r *http.Request) {
+
+	h.logger.Info("Getting expense types")
+
+	expenseTypes, err := h.service.GetExpenseTypesService(r.Context())
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+	responses.SuccessJSONResponse("expense types retrieved successfully", expenseTypes, http.StatusOK, w)
+}
+
+type ExpenseType struct {
+	Name string `json:"name"`
+}
+
+func (h *DriverHandler) CreateExpense(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Creating expense")
+	var expenseData ExpenseType
+	if err := json.NewDecoder(r.Body).Decode(&expenseData); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	expense, err := h.service.CreateExpenseService(r.Context(), expenseData.Name)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	data := map[string]interface{}{
+		"id": expense.ID,
+	}
+
+	responses.SuccessJSONResponse("expense created successfully", data, http.StatusCreated, w)
+}
