@@ -10,6 +10,7 @@ import (
 	"github.com/Robotech-Org/driver-management/internal/data/dm_svc_db"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -20,11 +21,22 @@ func SeedRole(ctx context.Context, cfg config.Config, name string) (*int32, erro
 		return &role.ID, nil
 	}
 
-	if err == pgx.ErrNoRows {
-		fmt.Println("Role already exists skipping")
-		return nil, err
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
+		fmt.Println("Role already exists, getting ID...")
+		roles, err := cfg.Queries.GetRoles(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get roles: %w", err)
+		}
+		for _, r := range roles {
+			if r.Name == name {
+				return &r.ID, nil
+			}
+		}
+		return nil, fmt.Errorf("role '%s' not found after creation failed", name)
 	}
-	return &role.ID, nil
+
+	return nil, err
 }
 
 func SeedAdmin(ctx context.Context, cfg config.Config, roleID int32) (uuid.UUID, error) {
@@ -82,7 +94,7 @@ func SeedExpenses(ctx context.Context, cfg config.Config) error {
 func UpdateAdminStatus(ctx context.Context, cfg config.Config, userID uuid.UUID) error {
 	userNew, err := cfg.Queries.UpdateUserStatus(ctx, userID)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	log.Printf("New user status: %v", userNew.Status)
 	return nil
@@ -99,9 +111,11 @@ func RunAll(ctx context.Context, cfg config.Config) error {
 		return errors.New("error seeding admin")
 	}
 
-	err = UpdateAdminStatus(ctx, cfg, adminID)
-	if err != nil {
-		return errors.New("error updating admin status")
+	if adminID != uuid.Nil {
+		err = UpdateAdminStatus(ctx, cfg, adminID)
+		if err != nil {
+			return errors.New("error updating admin status")
+		}
 	}
 
 	err = SeedExpenses(ctx, cfg)
