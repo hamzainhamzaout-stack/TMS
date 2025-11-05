@@ -86,7 +86,7 @@ func main() {
 	di := wiring.NewDependencyContainer(config)
 
 	if err := seed.RunAll(basectx, config); err != nil {
-		panic("Seed failed")
+		log.Printf("Error %v", err)
 	}
 
 	routes := transport.NewRoutes(di)
