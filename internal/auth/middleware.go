@@ -8,6 +8,10 @@ import (
 	"github.com/Robotech-Org/driver-management/utils/tokenGen"
 )
 
+type claimsKeyType struct{}
+
+var ClaimsKey = claimsKeyType{}
+
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("accessToken")

@@ -86,6 +86,23 @@ func (as *AuthService) Login(ctx context.Context, phoneNumber, plainTextPassword
 	return access, refresh, reset, nil
 }
 
+func (as *AuthService) RefreshTokenService(ctx context.Context, refreshToken string) (string, string, error) {
+	as.logger.Info("RefreshTokenService service started")
+	isBlacklisted, err := as.queries.IsTokenBlacklisted(ctx, refreshToken)
+	if err != nil {
+		return "", "", err
+	}
+	if isBlacklisted {
+		return "", "", errors.New("refresh token is blacklisted")
+	}
+
+	access, refresh, err := tokenGen.GenerateNewAccessToken(refreshToken, &as.queries, ctx)
+	if err != nil {
+		return "", "", err
+	}
+	return access, refresh, nil
+}
+
 func (as *AuthService) ValidateOTPService(ctx context.Context, phoneNumber string, userOTP string) (string, error) {
 	as.logger.Info("OTP validation service started")
 	user, err := as.queries.GetUserByPhoneNumber(ctx, phoneNumber)
@@ -235,6 +252,20 @@ func (as *AuthService) LogoutService(ctx context.Context, refreshToken string) (
 
 func (as *AuthService) GetRolesService(ctx context.Context) ([]dm_svc_db.Role, error) {
 	return as.queries.GetRoles(ctx)
+}
+
+func (ms *AuthService) GetUserProfile(ctx context.Context, userID string) (*dm_svc_db.UserProfileRow, error) {
+	ms.logger.Info("GetUserProfile service started")
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+	user, err := ms.queries.UserProfile(ctx, userUUID)
+	if err != nil {
+		ms.logger.Error("Failed to get user profile", "error", err)
+		return nil, err
+	}
+	return &user, nil
 }
 
 func (as *AuthService) CreateRoleService(ctx context.Context, roleData domain.Role) (string, error) {

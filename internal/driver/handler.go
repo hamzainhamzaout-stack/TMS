@@ -396,3 +396,15 @@ func (h *DriverHandler) CreateExpense(w http.ResponseWriter, r *http.Request) {
 
 	responses.SuccessJSONResponse("expense created successfully", data, http.StatusCreated, w)
 }
+
+func (h *DriverHandler) GetStats(w http.ResponseWriter, r *http.Request) {
+
+	h.logger.Info("Getting stats")
+
+	stats, err := h.service.GetStatsService(r.Context())
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+	responses.SuccessJSONResponse("stats retrieved successfully", stats, http.StatusOK, w)
+}
