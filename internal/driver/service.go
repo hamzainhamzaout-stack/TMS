@@ -207,3 +207,8 @@ func (s *DriverService) CreateExpenseService(ctx context.Context, name string) (
 	s.logger.Info("Creating expense", "expense", name)
 	return s.queries.CreateExpenseType(ctx, name)
 }
+
+func (s *DriverService) GetStatsService(ctx context.Context) (dm_svc_db.GetDashboardCountsRow, error) {
+	s.logger.Info("Getting stats")
+	return s.queries.GetDashboardCounts(ctx)
+}

@@ -7,6 +7,7 @@ package dm_svc_db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/greatcloak/decimal"
@@ -310,6 +311,33 @@ func (q *Queries) DeleteTrip(ctx context.Context, id int32) error {
 	return err
 }
 
+const getDashboardCounts = `-- name: GetDashboardCounts :one
+SELECT
+    COALESCE((SELECT COUNT(*) FROM driver), 0) AS driver_count,
+    COALESCE((SELECT COUNT(*) FROM cars), 0) AS car_count,
+    COALESCE((SELECT COUNT(*) FROM expenses), 0) AS expense_type_count,
+    COALESCE((SELECT COUNT(*) FROM trip), 0) AS trip_count
+`
+
+type GetDashboardCountsRow struct {
+	DriverCount      interface{} `json:"driver_count"`
+	CarCount         interface{} `json:"car_count"`
+	ExpenseTypeCount interface{} `json:"expense_type_count"`
+	TripCount        interface{} `json:"trip_count"`
+}
+
+func (q *Queries) GetDashboardCounts(ctx context.Context) (GetDashboardCountsRow, error) {
+	row := q.db.QueryRow(ctx, getDashboardCounts)
+	var i GetDashboardCountsRow
+	err := row.Scan(
+		&i.DriverCount,
+		&i.CarCount,
+		&i.ExpenseTypeCount,
+		&i.TripCount,
+	)
+	return i, err
+}
+
 const getDriverByID = `-- name: GetDriverByID :one
 SELECT id, first_name, last_name, phone_number, license_number, status, created_at, updated_at
 FROM driver
@@ -593,6 +621,17 @@ WHERE user_id = $1 AND status = 'active'
 func (q *Queries) InvalidateActiveOTPsForUser(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, invalidateActiveOTPsForUser, userID)
 	return err
+}
+
+const isTokenBlacklisted = `-- name: IsTokenBlacklisted :one
+SELECT EXISTS(SELECT 1 FROM blacklisted_tokens WHERE token = $1)
+`
+
+func (q *Queries) IsTokenBlacklisted(ctx context.Context, token string) (bool, error) {
+	row := q.db.QueryRow(ctx, isTokenBlacklisted, token)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const listCars = `-- name: ListCars :many
@@ -954,6 +993,51 @@ func (q *Queries) UpdateUserStatus(ctx context.Context, id uuid.UUID) (User, err
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const userProfile = `-- name: UserProfile :one
+SELECT
+  u.id,
+  u.first_name,
+  u.last_name,
+  u.phone_number,
+  u.status,
+  u.created_at,
+  u.updated_at,
+  r.id AS role_id,
+  r.name AS role_name
+FROM users u
+JOIN role r ON u.role_id = r.id
+WHERE u.id = $1
+`
+
+type UserProfileRow struct {
+	ID          uuid.UUID `json:"id"`
+	FirstName   string    `json:"first_name"`
+	LastName    string    `json:"last_name"`
+	PhoneNumber string    `json:"phone_number"`
+	Status      UserState `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	RoleID      int32     `json:"role_id"`
+	RoleName    string    `json:"role_name"`
+}
+
+func (q *Queries) UserProfile(ctx context.Context, id uuid.UUID) (UserProfileRow, error) {
+	row := q.db.QueryRow(ctx, userProfile, id)
+	var i UserProfileRow
+	err := row.Scan(
+		&i.ID,
+		&i.FirstName,
+		&i.LastName,
+		&i.PhoneNumber,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.RoleID,
+		&i.RoleName,
 	)
 	return i, err
 }

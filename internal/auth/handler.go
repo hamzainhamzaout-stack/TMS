@@ -15,6 +15,7 @@ import (
 	"github.com/Robotech-Org/driver-management/utils/responses"
 	validator "github.com/Robotech-Org/driver-management/utils/validators"
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 type AuthHandler struct {
@@ -195,6 +196,102 @@ func (ah *AuthHandler) performLogin(ctx context.Context, userLoginData domain.Us
 	return ah.service.Login(ctx, userLoginData.PhoneNumber, userLoginData.Password)
 }
 
+func (ah *AuthHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
+	refreshCookie, err := r.Cookie("refreshToken")
+	if err != nil {
+		responses.ErrorJSONResponse(fmt.Errorf("error: %v", err), http.StatusBadRequest, w, nil)
+		return
+	}
+	refreshToken := refreshCookie.Value
+	if refreshToken == "" {
+		responses.ErrorJSONResponse(fmt.Errorf("error: %v", err), http.StatusBadRequest, w, nil)
+		return
+	}
+
+	if refreshToken == "" {
+		ah.logger.Error("Empty refresh token provided")
+		responses.ErrorJSONResponse(errors.New("error getting the token"), http.StatusBadRequest, w, nil)
+		return
+	}
+
+	newToken, newRefreshToken, err := ah.service.RefreshTokenService(r.Context(), refreshToken)
+	if err != nil {
+		ah.logger.Error("Failed to refresh token", "error", err)
+		responses.ErrorJSONResponse(fmt.Errorf("failed to refresh token, please log in again"), http.StatusUnauthorized, w, nil)
+		return
+	}
+
+	environment := os.Getenv("ENV")
+	clearCookie := func(name string) {
+		cookie := &http.Cookie{
+			Name:     name,
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+		}
+
+		if environment == "development" {
+			cookie.Secure = true
+			cookie.SameSite = http.SameSiteNoneMode
+		} else {
+			cookie.Secure = r.TLS != nil
+		}
+
+		http.SetCookie(w, cookie)
+	}
+
+	clearCookie("accessToken")
+	clearCookie("refreshToken")
+
+	if environment == "development" {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "accessToken",
+			Value:    newToken,
+			Path:     "/",
+			MaxAge:   int(time.Until(time.Now().Add(15 * time.Minute)).Seconds()),
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteNoneMode,
+		})
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "refreshToken",
+			Value:    newRefreshToken,
+			Path:     "/",
+			MaxAge:   int(time.Until(time.Now().Add(3 * time.Hour)).Seconds()),
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteNoneMode,
+		})
+
+		ah.logger.Info("Cookies set for development environment with SameSite=None")
+	} else {
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "accessToken",
+			Value:    newToken,
+			Path:     "/",
+			MaxAge:   int(time.Until(time.Now().Add(15 * time.Minute)).Seconds()),
+			HttpOnly: true,
+			Secure:   r.TLS != nil,
+		})
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "refreshToken",
+			Value:    newRefreshToken,
+			Path:     "/",
+			MaxAge:   int(time.Until(time.Now().Add(3 * time.Hour)).Seconds()),
+			HttpOnly: true,
+			Secure:   r.TLS != nil,
+		})
+	}
+
+	responses.SuccessJSONResponse("Token refreshed successfully", map[string]string{
+		"access_token": newToken,
+	}, http.StatusOK, w)
+}
+
 func (ah *AuthHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Request) {
 	ah.logger.Info("Reset Password Handler Initiated")
 
@@ -241,6 +338,30 @@ func (ah *AuthHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Reque
 	clearCookie("passwordResetToken")
 
 	responses.SuccessJSONResponse("password reset successful", nil, http.StatusOK, w)
+}
+
+func (mh *AuthHandler) ProfileHandler(w http.ResponseWriter, r *http.Request) {
+	claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+	if !ok {
+		responses.ErrorJSONResponse(errors.New("invalid token claims"), http.StatusUnauthorized, w, nil)
+		return
+	}
+
+	userID, ok := claims["user_id"].(string)
+	if !ok {
+		responses.ErrorJSONResponse(errors.New("user_id not found in claims"), http.StatusUnauthorized, w, nil)
+		return
+	}
+	mh.logger.Info("ProfileHandler handler started", "user", userID)
+
+	userProfile, err := mh.service.GetUserProfile(r.Context(), userID)
+	if err != nil {
+		mh.logger.Error("failed to get user profile", "error", err)
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	responses.SuccessJSONResponse("success", userProfile, http.StatusOK, w)
 }
 
 func (ah *AuthHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {

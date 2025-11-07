@@ -15,7 +15,7 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 
 	cors := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
@@ -31,8 +31,15 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 
 	router.Group(func(r chi.Router) {
 		r.Post("/login", di.AuthHandler.Login)
+		r.Post("/refresh", di.AuthHandler.RefreshTokenHandler)
+	})
+
+	// Authenticated routes
+	router.Group(func(r chi.Router) {
+		r.Use(auth.AuthMiddleware)
+		r.Get("/me", di.AuthHandler.ProfileHandler)
 		r.Post("/logout", di.AuthHandler.LogoutHandler)
-		r.Post("/set-password", di.AuthHandler.ResetPasswordHandler)
+		r.Post("/account/set_password", di.AuthHandler.ResetPasswordHandler)
 	})
 
 	router.Route("/admin", func(adminRoute chi.Router) {
@@ -70,6 +77,9 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 		adminRoute.Route("/expense", func(r chi.Router) {
 			r.Get("/", di.DriverHandler.GetExpenseTypes)
 			r.Post("/", di.DriverHandler.CreateExpense)
+		})
+		adminRoute.Route("/stats", func(r chi.Router) {
+			r.Get("/", di.DriverHandler.GetStats)
 		})
 	})
 

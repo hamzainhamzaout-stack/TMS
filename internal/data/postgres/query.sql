@@ -3,6 +3,24 @@ INSERT INTO users(first_name, last_name, phone_number, password_hash, role_id)
 VALUES($1, $2, $3, $4, $5)
 RETURNING *;
 
+-- name: UserProfile :one
+SELECT
+  u.id,
+  u.first_name,
+  u.last_name,
+  u.phone_number,
+  u.status,
+  u.created_at,
+  u.updated_at,
+  r.id AS role_id,
+  r.name AS role_name
+FROM users u
+JOIN role r ON u.role_id = r.id
+WHERE u.id = $1;
+
+-- name: IsTokenBlacklisted :one
+SELECT EXISTS(SELECT 1 FROM blacklisted_tokens WHERE token = $1);
+
 -- name: CreateRole :one
 INSERT INTO role(name)
 VALUES($1)
@@ -193,3 +211,10 @@ SELECT t.id, t.driver_id, t.total_cost, t.approved_by, t.created_at, t.updated_a
 FROM trip t
 JOIN driver d ON t.driver_id = d.id
 WHERE t.id = $1;
+
+-- name: GetDashboardCounts :one
+SELECT
+    COALESCE((SELECT COUNT(*) FROM driver), 0) AS driver_count,
+    COALESCE((SELECT COUNT(*) FROM cars), 0) AS car_count,
+    COALESCE((SELECT COUNT(*) FROM expenses), 0) AS expense_type_count,
+    COALESCE((SELECT COUNT(*) FROM trip), 0) AS trip_count;
