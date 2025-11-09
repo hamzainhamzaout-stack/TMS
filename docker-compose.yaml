@@ -41,8 +41,6 @@ services:
 
   driver-mgmt-service:
     build: .
-    ports:
-      - "8091:8091"
     env_file:
       - .env
     depends_on:
@@ -53,8 +51,6 @@ services:
 
   swagger-ui:
     image: swaggerapi/swagger-ui
-    ports:
-      - "8082:8080"
     volumes:
       - ./docs:/usr/share/nginx/html/docs
     environment:
@@ -62,8 +58,32 @@ services:
     networks:
       - shared-network
 
+  nginx:
+    image: nginx:stable-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    depends_on:
+      - driver-mgmt-service
+      - swagger-ui
+    restart: unless-stopped
+    networks:
+      - shared-network
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
 volumes:
   postgres:
+  certbot:
 
 networks:
   shared-network:

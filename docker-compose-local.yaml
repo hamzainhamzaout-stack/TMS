@@ -1,0 +1,69 @@
+services:
+  postgres:
+    container_name: driver_pg
+    build:
+      dockerfile: Dockerfile.db
+      context: .
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-drivermgmt}
+      PGDATA: /data/postgres
+    volumes:
+      - postgres:/data/postgres
+    ports:
+      - "5435:5432"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -d ${POSTGRES_DB:-drivermgmt} -U ${POSTGRES_USER:-user}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shared-network
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate
+    environment:
+      - GOOSE_DRIVER=postgres
+      - GOOSE_DBSTRING=${DM_DB_DSN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - shared-network
+
+  driver-mgmt-service:
+    build: .
+    ports:
+      - "8091:8091"
+    env_file:
+      - .env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - shared-network
+
+  swagger-ui:
+    image: swaggerapi/swagger-ui
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./docs:/usr/share/nginx/html/docs
+    environment:
+      API_URL: docs/swagger.yaml
+    networks:
+      - shared-network
+
+volumes:
+  postgres:
+
+networks:
+  shared-network:

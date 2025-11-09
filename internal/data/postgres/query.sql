@@ -217,4 +217,6 @@ SELECT
     COALESCE((SELECT COUNT(*) FROM driver), 0) AS driver_count,
     COALESCE((SELECT COUNT(*) FROM cars), 0) AS car_count,
     COALESCE((SELECT COUNT(*) FROM expenses), 0) AS expense_type_count,
-    COALESCE((SELECT COUNT(*) FROM trip), 0) AS trip_count;
+    COALESCE((SELECT COUNT(*) FROM trip), 0) AS trip_count,
+    COALESCE((SELECT COUNT(*) FROM driver WHERE status = 'active'), 0) AS active_driver_count,
+    COALESCE((SELECT COUNT(*) FROM trip WHERE isActive), 0) AS active_trips_count;
