@@ -316,14 +316,18 @@ SELECT
     COALESCE((SELECT COUNT(*) FROM driver), 0) AS driver_count,
     COALESCE((SELECT COUNT(*) FROM cars), 0) AS car_count,
     COALESCE((SELECT COUNT(*) FROM expenses), 0) AS expense_type_count,
-    COALESCE((SELECT COUNT(*) FROM trip), 0) AS trip_count
+    COALESCE((SELECT COUNT(*) FROM trip), 0) AS trip_count,
+    COALESCE((SELECT COUNT(*) FROM driver WHERE status = 'active'), 0) AS active_driver_count,
+    COALESCE((SELECT COUNT(*) FROM trip WHERE isActive), 0) AS active_trips_count
 `
 
 type GetDashboardCountsRow struct {
-	DriverCount      interface{} `json:"driver_count"`
-	CarCount         interface{} `json:"car_count"`
-	ExpenseTypeCount interface{} `json:"expense_type_count"`
-	TripCount        interface{} `json:"trip_count"`
+	DriverCount       interface{} `json:"driver_count"`
+	CarCount          interface{} `json:"car_count"`
+	ExpenseTypeCount  interface{} `json:"expense_type_count"`
+	TripCount         interface{} `json:"trip_count"`
+	ActiveDriverCount interface{} `json:"active_driver_count"`
+	ActiveTripsCount  interface{} `json:"active_trips_count"`
 }
 
 func (q *Queries) GetDashboardCounts(ctx context.Context) (GetDashboardCountsRow, error) {
@@ -334,6 +338,8 @@ func (q *Queries) GetDashboardCounts(ctx context.Context) (GetDashboardCountsRow
 		&i.CarCount,
 		&i.ExpenseTypeCount,
 		&i.TripCount,
+		&i.ActiveDriverCount,
+		&i.ActiveTripsCount,
 	)
 	return i, err
 }

@@ -255,11 +255,7 @@ paths:
           description: "Driver ID"
           required: true
           schema:
-            type: "object"
-            properties:
-              driver_id:
-                type: "integer"
-                format: "int64"
+            $ref: "#/definitions/CarDriver"
       responses:
         "200":
           description: "Car's driver updated"
@@ -292,6 +288,21 @@ paths:
         "201":
           description: "Trip created"
   /admin/trip/{id}:
+    get:
+      summary: "Get trip detail"
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+      responses:
+        "200":
+          description: "Trip detail"
+          schema:
+            $ref: "#/definitions/TripDetail"
     patch:
       summary: "Update a trip"
       consumes:
@@ -324,6 +335,93 @@ paths:
       responses:
         "200":
           description: "Trip deleted"
+  /admin/expense:
+    get:
+      summary: "Get all expense types"
+      produces:
+        - "application/json"
+      responses:
+        "200":
+          description: "A list of expense types"
+          schema:
+            type: "array"
+            items:
+              $ref: "#/definitions/Expense"
+    post:
+      summary: "Create a new expense"
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - in: "body"
+          name: "body"
+          description: "Expense data"
+          required: true
+          schema:
+            $ref: "#/definitions/Expense"
+      responses:
+        "201":
+          description: "Expense created"
+  /admin/stats:
+    get:
+      summary: "Get stats"
+      produces:
+        - "application/json"
+      responses:
+        "200":
+          description: "Stats"
+          schema:
+            $ref: "#/definitions/Stats"
+  /finance/trip:
+    get:
+      summary: "Get all trips"
+      produces:
+        - "application/json"
+      responses:
+        "200":
+          description: "A list of trips"
+          schema:
+            type: "array"
+            items:
+              $ref: "#/definitions/Trip"
+  /finance/trip/{id}:
+    get:
+      summary: "Get trip detail"
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+      responses:
+        "200":
+          description: "Trip detail"
+          schema:
+            $ref: "#/definitions/TripDetail"
+  /finance/trip/{id}/upload-receipt:
+    post:
+      summary: "Upload a receipt for a trip"
+      consumes:
+        - "multipart/form-data"
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+        - name: "receipt"
+          in: "formData"
+          description: "Receipt file"
+          required: true
+          type: "file"
+      responses:
+        "200":
+          description: "Receipt uploaded"
   /user/password:
     post:
       summary: "Reset user password"
@@ -355,7 +453,7 @@ definitions:
   User:
     type: "object"
     properties:
-      first_name:
+      first_.name:
         type: "string"
       last_name:
         type: "string"
@@ -410,6 +508,12 @@ definitions:
       driver_id:
         type: "integer"
         format: "int64"
+  CarDriver:
+    type: "object"
+    properties:
+      current_driver_id:
+        type: "integer"
+        format: "int64"
   Trip:
     type: "object"
     properties:
@@ -419,18 +523,52 @@ definitions:
       driver_id:
         type: "integer"
         format: "int64"
-      car_id:
+      total_cost:
+        type: "number"
+        format: "double"
+      expenses:
+        type: "array"
+        items:
+          type: "integer"
+          format: "int32"
+  TripDetail:
+    type: "object"
+    properties:
+      id:
         type: "integer"
         format: "int32"
-      start_time:
+      driver_id:
+        type: "integer"
+        format: "int64"
+      total_cost:
+        type: "number"
+        format: "double"
+      expenses:
+        type: "array"
+        items:
+          $ref: "#/definitions/Expense"
+      receipt_url:
         type: "string"
-        format: "date-time"
-      end_time:
+  Expense:
+    type: "object"
+    properties:
+      id:
+        type: "integer"
+        format: "int32"
+      name:
         type: "string"
-        format: "date-time"
-      start_location:
-        type: "string"
-      end_location:
-        type: "string"
-      status:
-        type: "string"
+  Stats:
+    type: "object"
+    properties:
+      drivers:
+        type: "integer"
+        format: "int64"
+      cars:
+        type: "integer"
+        format: "int64"
+      trips:
+        type: "integer"
+        format: "int64"
+      expenses:
+        type: "integer"
+        format: "int64"
