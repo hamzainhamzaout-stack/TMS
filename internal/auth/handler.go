@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Robotech-Org/driver-management/internal/domain"
@@ -108,6 +109,14 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	case "web":
 		ah.logger.Info("Handling web client: Setting HttpOnly cookies.")
 		if environment == "development" {
+			secure := false
+			sameSite := http.SameSiteLaxMode
+
+			if strings.Contains(r.Host, "localhost") {
+				// For local development, you can’t use Secure cookies
+				secure = false
+				sameSite = http.SameSiteLaxMode
+			}
 			if passwordResetToken != "" {
 				http.SetCookie(w, &http.Cookie{
 					Name:     "passwordResetToken",
@@ -115,8 +124,8 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 					Path:     "/",
 					MaxAge:   int(time.Until(time.Now().Add(15 * time.Minute)).Seconds()),
 					HttpOnly: true,
-					Secure:   true,
-					SameSite: http.SameSiteNoneMode,
+					Secure:   secure,
+					SameSite: sameSite,
 				})
 				responses.SuccessJSONResponse("Successfully authenticated", map[string]string{
 					"reset_token": passwordResetToken,
@@ -128,8 +137,8 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 					Path:     "/",
 					MaxAge:   int(time.Until(time.Now().Add(15 * time.Minute)).Seconds()),
 					HttpOnly: true,
-					Secure:   true,
-					SameSite: http.SameSiteNoneMode,
+					Secure:   secure,
+					SameSite: sameSite,
 				})
 
 				http.SetCookie(w, &http.Cookie{
@@ -138,8 +147,8 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 					Path:     "/",
 					MaxAge:   int(time.Until(time.Now().Add(3 * time.Hour)).Seconds()),
 					HttpOnly: true,
-					Secure:   true,
-					SameSite: http.SameSiteNoneMode,
+					Secure:   secure,
+					SameSite: sameSite,
 				})
 				responses.SuccessJSONResponse("Successfully authenticated", map[string]string{
 					"access_token":  accessToken,
@@ -510,10 +519,10 @@ func (ah *AuthHandler) UpdateProfileHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	data := map[string]interface{}{
-		"message": "Profile updated successfully",
-		"first_name": user.FirstName,
-		"last_name":  user.LastName,
-		"status":     user.Status,
+		"message":      "Profile updated successfully",
+		"first_name":   user.FirstName,
+		"last_name":    user.LastName,
+		"status":       user.Status,
 		"phone_number": user.PhoneNumber,
 	}
 
