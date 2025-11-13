@@ -137,6 +137,12 @@ func (h *DriverHandler) UpdateCar(w http.ResponseWriter, r *http.Request) {
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
 		return
 	}
+	carID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	carDetail.ID = int32(carID)
 	car, err := h.service.UpdateCar(r.Context(), &carDetail)
 	if err != nil {
 		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
