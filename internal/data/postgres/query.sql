@@ -220,3 +220,12 @@ SELECT
     COALESCE((SELECT COUNT(*) FROM trip), 0) AS trip_count,
     COALESCE((SELECT COUNT(*) FROM driver WHERE status = 'active'), 0) AS active_driver_count,
     COALESCE((SELECT COUNT(*) FROM trip WHERE isActive), 0) AS active_trips_count;
+
+-- name: UpdateUserProfile :one
+UPDATE users
+SET
+    first_name = COALESCE(sqlc.narg(first_name), first_name),
+    last_name = COALESCE(sqlc.narg(last_name), last_name)
+WHERE
+    id = $1
+RETURNING *;

@@ -17,3 +17,8 @@ type Role struct {
 	ID   int32  `json:"id"`
 	Name string `json:"name"`
 }
+
+type UpdateUserRequest struct {
+	FirstName *string `json:"first_name"`
+	LastName  *string `json:"last_name"`
+}

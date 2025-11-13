@@ -323,3 +323,26 @@ func (s *AuthService) DeleteRoleService(ctx context.Context, roleID int32) error
 func (s *AuthService) GetUsersService(ctx context.Context) ([]dm_svc_db.User, error) {
 	return s.queries.GetUsers(ctx)
 }
+
+func (as *AuthService) UpdateUserProfile(ctx context.Context, userID string, req domain.UpdateUserRequest) (*dm_svc_db.User, error) {
+	as.logger.Info("UpdateUserProfile service started")
+
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	params := dm_svc_db.UpdateUserProfileParams{
+		ID:        userUUID,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+	}
+
+	user, err := as.queries.UpdateUserProfile(ctx, params)
+	if err != nil {
+		as.logger.Error("Failed to update user profile", "error", err)
+		return nil, err
+	}
+
+	return &user, nil
+}
