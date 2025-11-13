@@ -171,6 +171,7 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 					MaxAge:   int(time.Until(time.Now().Add(15 * time.Minute)).Seconds()),
 					HttpOnly: true,
 					Secure:   r.TLS != nil,
+					Domain:   "https://erp-system-eta-nine.vercel.app",
 				})
 				http.SetCookie(w, &http.Cookie{
 					Name:     "refreshToken",
