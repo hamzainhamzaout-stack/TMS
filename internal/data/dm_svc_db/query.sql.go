@@ -979,6 +979,39 @@ func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPassword
 	return err
 }
 
+const updateUserProfile = `-- name: UpdateUserProfile :one
+UPDATE users
+SET
+    first_name = COALESCE($2, first_name),
+    last_name = COALESCE($3, last_name)
+WHERE
+    id = $1
+RETURNING id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at
+`
+
+type UpdateUserProfileParams struct {
+	ID        uuid.UUID `json:"id"`
+	FirstName *string   `json:"first_name"`
+	LastName  *string   `json:"last_name"`
+}
+
+func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserProfile, arg.ID, arg.FirstName, arg.LastName)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.FirstName,
+		&i.LastName,
+		&i.PasswordHash,
+		&i.PhoneNumber,
+		&i.RoleID,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateUserStatus = `-- name: UpdateUserStatus :one
 UPDATE users
 SET status = 'active'

@@ -38,6 +38,7 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 	router.Group(func(r chi.Router) {
 		r.Use(auth.AuthMiddleware)
 		r.Get("/me", di.AuthHandler.ProfileHandler)
+		r.Patch("/me", di.AuthHandler.UpdateProfileHandler)
 		r.Post("/logout", di.AuthHandler.LogoutHandler)
 		r.Post("/account/set_password", di.AuthHandler.ResetPasswordHandler)
 	})

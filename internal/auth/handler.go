@@ -15,7 +15,6 @@ import (
 	"github.com/Robotech-Org/driver-management/utils/responses"
 	validator "github.com/Robotech-Org/driver-management/utils/validators"
 	"github.com/go-chi/chi/v5"
-	"github.com/golang-jwt/jwt/v4"
 )
 
 type AuthHandler struct {
@@ -341,17 +340,12 @@ func (ah *AuthHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (mh *AuthHandler) ProfileHandler(w http.ResponseWriter, r *http.Request) {
-	claims, ok := r.Context().Value(ClaimsKey).(jwt.MapClaims)
+	userID, ok := GetUserIDFromContext(r.Context())
 	if !ok {
-		responses.ErrorJSONResponse(errors.New("invalid token claims"), http.StatusUnauthorized, w, nil)
+		responses.ErrorJSONResponse(errors.New("user_id not found in context"), http.StatusUnauthorized, w, nil)
 		return
 	}
 
-	userID, ok := claims["user_id"].(string)
-	if !ok {
-		responses.ErrorJSONResponse(errors.New("user_id not found in claims"), http.StatusUnauthorized, w, nil)
-		return
-	}
 	mh.logger.Info("ProfileHandler handler started", "user", userID)
 
 	userProfile, err := mh.service.GetUserProfile(r.Context(), userID)
@@ -492,4 +486,36 @@ func (ah *AuthHandler) GetUsersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	responses.SuccessJSONResponse("Users retrieved successfully", users, http.StatusOK, w)
+}
+
+func (ah *AuthHandler) UpdateProfileHandler(w http.ResponseWriter, r *http.Request) {
+	ah.logger.Info("UpdateProfileHandler handler started")
+
+	userID, ok := GetUserIDFromContext(r.Context())
+	if !ok {
+		responses.ErrorJSONResponse(errors.New("user_id not found in context"), http.StatusUnauthorized, w, nil)
+		return
+	}
+
+	var req domain.UpdateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	user, err := ah.service.UpdateUserProfile(r.Context(), userID, req)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	data := map[string]interface{}{
+		"message": "Profile updated successfully",
+		"first_name": user.FirstName,
+		"last_name":  user.LastName,
+		"status":     user.Status,
+		"phone_number": user.PhoneNumber,
+	}
+
+	responses.SuccessJSONResponse("success", data, http.StatusOK, w)
 }
