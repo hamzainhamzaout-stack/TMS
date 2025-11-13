@@ -131,7 +131,6 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 					HttpOnly: true,
 					Secure:   true,
 					SameSite: http.SameSiteNoneMode,
-					Domain:   "https://erp-system-eta-nine.vercel.app",
 				})
 
 				http.SetCookie(w, &http.Cookie{
@@ -143,10 +142,7 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 					Secure:   true,
 					SameSite: http.SameSiteNoneMode,
 				})
-				responses.SuccessJSONResponse("Successfully authenticated", map[string]string{
-					"access_token":  accessToken,
-					"refresh_token": refreshToken,
-				}, http.StatusOK, w)
+				responses.SuccessJSONResponse("Successfully authenticated", nil, http.StatusOK, w)
 			}
 			ah.logger.Info("Cookies set for development environment with SameSite=None")
 
@@ -171,7 +167,6 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 					MaxAge:   int(time.Until(time.Now().Add(15 * time.Minute)).Seconds()),
 					HttpOnly: true,
 					Secure:   r.TLS != nil,
-					Domain:   "https://erp-system-eta-nine.vercel.app",
 				})
 				http.SetCookie(w, &http.Cookie{
 					Name:     "refreshToken",
@@ -181,10 +176,7 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 					HttpOnly: true,
 					Secure:   r.TLS != nil,
 				})
-				responses.SuccessJSONResponse("Successfully authenticated", map[string]string{
-					"access_token":  accessToken,
-					"refresh_token": refreshToken,
-				}, http.StatusOK, w)
+				responses.SuccessJSONResponse("Successfully authenticated", nil, http.StatusOK, w)
 			}
 		}
 
