@@ -78,6 +78,8 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 		adminRoute.Route("/expense", func(r chi.Router) {
 			r.Get("/", di.DriverHandler.GetExpenseTypes)
 			r.Post("/", di.DriverHandler.CreateExpense)
+			r.Patch("/{id}", di.DriverHandler.UpdateExpense)
+			r.Delete("/{id}", di.DriverHandler.DeleteExpense)
 		})
 		adminRoute.Route("/stats", func(r chi.Router) {
 			r.Get("/", di.DriverHandler.GetStats)

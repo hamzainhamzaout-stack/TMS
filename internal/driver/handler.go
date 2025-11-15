@@ -403,6 +403,49 @@ func (h *DriverHandler) CreateExpense(w http.ResponseWriter, r *http.Request) {
 	responses.SuccessJSONResponse("expense created successfully", data, http.StatusCreated, w)
 }
 
+func (h *DriverHandler) UpdateExpense(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Updating expense")
+	var expenseData ExpenseType
+	if err := json.NewDecoder(r.Body).Decode(&expenseData); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	expenseID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	expense, err := h.service.UpdateExpenseService(r.Context(), int32(expenseID), expenseData.Name)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	data := map[string]interface{}{
+		"id": expense.ID,
+	}
+
+	responses.SuccessJSONResponse("expense updated successfully", data, http.StatusOK, w)
+}
+
+func (h *DriverHandler) DeleteExpense(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Deleting expense")
+	expenseID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	if err := h.service.DeleteExpenseService(r.Context(), int32(expenseID)); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	responses.SuccessJSONResponse("expense deleted successfully", nil, http.StatusOK, w)
+}
+
 func (h *DriverHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.Info("Getting stats")

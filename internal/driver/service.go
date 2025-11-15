@@ -208,6 +208,19 @@ func (s *DriverService) CreateExpenseService(ctx context.Context, name string) (
 	return s.queries.CreateExpenseType(ctx, name)
 }
 
+func (s *DriverService) UpdateExpenseService(ctx context.Context, expenseID int32, name string) (dm_svc_db.Expense, error) {
+	s.logger.Info("Updating expense", "expenseID", expenseID, "name", name)
+	return s.queries.UpdateExpenseType(ctx, dm_svc_db.UpdateExpenseTypeParams{
+		ID:   expenseID,
+		Name: name,
+	})
+}
+
+func (s *DriverService) DeleteExpenseService(ctx context.Context, expenseID int32) error {
+	s.logger.Info("Deleting expense", "expenseID", expenseID)
+	return s.queries.DeleteExpenseType(ctx, expenseID)
+}
+
 func (s *DriverService) GetStatsService(ctx context.Context) (dm_svc_db.GetDashboardCountsRow, error) {
 	s.logger.Info("Getting stats")
 	return s.queries.GetDashboardCounts(ctx)

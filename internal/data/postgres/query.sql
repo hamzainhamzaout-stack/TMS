@@ -206,6 +206,16 @@ RETURNING *;
 SELECT *
 FROM expenses;
 
+-- name: UpdateExpenseType :one
+UPDATE expenses
+SET name = $2
+WHERE id = $1
+RETURNING *;
+
+-- name: DeleteExpenseType :exec
+DELETE FROM expenses
+WHERE id = $1;
+
 -- name: GetTripDetail :one
 SELECT t.id, t.driver_id, t.total_cost, t.approved_by, t.created_at, t.updated_at, d.first_name AS driver_first_name, d.last_name AS driver_last_name
 FROM trip t

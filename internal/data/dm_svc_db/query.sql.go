@@ -290,6 +290,16 @@ func (q *Queries) DeleteDriver(ctx context.Context, id int32) error {
 	return err
 }
 
+const deleteExpenseType = `-- name: DeleteExpenseType :exec
+DELETE FROM expenses
+WHERE id = $1
+`
+
+func (q *Queries) DeleteExpenseType(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, deleteExpenseType, id)
+	return err
+}
+
 const deleteRole = `-- name: DeleteRole :exec
 DELETE FROM role
 WHERE id = $1
@@ -844,6 +854,25 @@ func (q *Queries) UpdateDriver(ctx context.Context, arg UpdateDriverParams) (Dri
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const updateExpenseType = `-- name: UpdateExpenseType :one
+UPDATE expenses
+SET name = $2
+WHERE id = $1
+RETURNING id, name
+`
+
+type UpdateExpenseTypeParams struct {
+	ID   int32  `json:"id"`
+	Name string `json:"name"`
+}
+
+func (q *Queries) UpdateExpenseType(ctx context.Context, arg UpdateExpenseTypeParams) (Expense, error) {
+	row := q.db.QueryRow(ctx, updateExpenseType, arg.ID, arg.Name)
+	var i Expense
+	err := row.Scan(&i.ID, &i.Name)
 	return i, err
 }
 
