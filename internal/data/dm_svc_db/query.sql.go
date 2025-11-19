@@ -210,9 +210,9 @@ RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created
 `
 
 type CreateTripParams struct {
-	DriverID   int32          `json:"driver_id"`
-	TotalCost  pgtype.Numeric `json:"total_cost"`
-	ApprovedBy uuid.UUID      `json:"approved_by"`
+	DriverID   int32     `json:"driver_id"`
+	TotalCost  float64   `json:"total_cost"`
+	ApprovedBy uuid.UUID `json:"approved_by"`
 }
 
 func (q *Queries) CreateTrip(ctx context.Context, arg CreateTripParams) (Trip, error) {
@@ -227,6 +227,39 @@ func (q *Queries) CreateTrip(ctx context.Context, arg CreateTripParams) (Trip, e
 		&i.Isactive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createTripExpense = `-- name: CreateTripExpense :one
+INSERT INTO trip_expenses(trip_id, expenses_id, cost, receipt_url, remark)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING trip_id, expenses_id, receipt_url, remark, cost
+`
+
+type CreateTripExpenseParams struct {
+	TripID     int32   `json:"trip_id"`
+	ExpensesID int32   `json:"expenses_id"`
+	Cost       float64 `json:"cost"`
+	ReceiptUrl *string `json:"receipt_url"`
+	Remark     *string `json:"remark"`
+}
+
+func (q *Queries) CreateTripExpense(ctx context.Context, arg CreateTripExpenseParams) (TripExpense, error) {
+	row := q.db.QueryRow(ctx, createTripExpense,
+		arg.TripID,
+		arg.ExpensesID,
+		arg.Cost,
+		arg.ReceiptUrl,
+		arg.Remark,
+	)
+	var i TripExpense
+	err := row.Scan(
+		&i.TripID,
+		&i.ExpensesID,
+		&i.ReceiptUrl,
+		&i.Remark,
+		&i.Cost,
 	)
 	return i, err
 }
@@ -477,7 +510,7 @@ WHERE t.id = $1
 type GetTripDetailRow struct {
 	ID              int32            `json:"id"`
 	DriverID        int32            `json:"driver_id"`
-	TotalCost       pgtype.Numeric   `json:"total_cost"`
+	TotalCost       float64          `json:"total_cost"`
 	ApprovedBy      uuid.UUID        `json:"approved_by"`
 	CreatedAt       pgtype.Timestamp `json:"created_at"`
 	UpdatedAt       pgtype.Timestamp `json:"updated_at"`
@@ -920,7 +953,7 @@ RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created
 
 type UpdateTripParams struct {
 	ID         int32            `json:"id"`
-	TotalCost  pgtype.Numeric   `json:"total_cost"`
+	TotalCost  float64          `json:"total_cost"`
 	ApprovedBy uuid.UUID        `json:"approved_by"`
 	CreatedAt  pgtype.Timestamp `json:"created_at"`
 	UpdatedAt  pgtype.Timestamp `json:"updated_at"`

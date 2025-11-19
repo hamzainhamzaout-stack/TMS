@@ -180,7 +180,7 @@ type Role struct {
 type Trip struct {
 	ID         int32            `json:"id"`
 	DriverID   int32            `json:"driver_id"`
-	TotalCost  pgtype.Numeric   `json:"total_cost"`
+	TotalCost  float64          `json:"total_cost"`
 	ReceiptUrl *string          `json:"receipt_url"`
 	ApprovedBy uuid.UUID        `json:"approved_by"`
 	Isactive   bool             `json:"isactive"`
@@ -189,8 +189,11 @@ type Trip struct {
 }
 
 type TripExpense struct {
-	TripID     int32 `json:"trip_id"`
-	ExpensesID int32 `json:"expenses_id"`
+	TripID     int32   `json:"trip_id"`
+	ExpensesID int32   `json:"expenses_id"`
+	ReceiptUrl *string `json:"receipt_url"`
+	Remark     *string `json:"remark"`
+	Cost       float64 `json:"cost"`
 }
 
 type User struct {

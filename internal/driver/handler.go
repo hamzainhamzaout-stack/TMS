@@ -230,9 +230,8 @@ func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		DriverID   int32   `json:"driver_id"`
-		TotalCost  float64 `json:"total_cost"`
-		ExpenseIDs []int32 `json:"expenses"`
+		DriverID  int32   `json:"driver_id"`
+		TotalCost float64 `json:"total_cost"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
@@ -246,7 +245,6 @@ func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 	tripData := domain.CreateTripParams{
 		DriverID:   req.DriverID,
 		TotalCost:  req.TotalCost,
-		ExpenseIDs: req.ExpenseIDs,
 		ApprovedBy: approvedBy,
 	}
 	if err := h.service.CreateTrip(r.Context(), tripData); err != nil {
@@ -329,7 +327,19 @@ func (h *DriverHandler) TripDetail(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (h *DriverHandler) UploadReceipt(w http.ResponseWriter, r *http.Request) {
+// func (h *DriverHandler) CreateTripExpenses(w http.ResponseWriter, r *http.Request) {
+// 	h.logger.Info("creating trips and expenses")
+
+// 	tripID, err := strconv.Atoi(chi.URLParam(r, "trip-id"))
+// 	if err != nil {
+// 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+// 		return
+// 	}
+
+// 	var createTripExpense TripExpense
+// }
+
+func (h *DriverHandler) CreateTripExpenseHandler(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.Info("Uploading receipt")
 
@@ -359,11 +369,41 @@ func (h *DriverHandler) UploadReceipt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	receiptURL := uploadResult.SecureURL
-	if err := h.service.UploadReceiptService(r.Context(), int32(tripID), receiptURL); err != nil {
+	// if err := h.service.UploadReceiptService(r.Context(), int32(tripID), receiptURL); err != nil {
+	// 	responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+	// 	return
+	// }
+
+	expenseIDStr := r.FormValue("expense_id")
+	if expenseIDStr == "" {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	costStr := r.FormValue("cost")
+	if costStr == "" {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	cost, err := strconv.ParseFloat(costStr, 64)
+	if err != nil {
 		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
 		return
 	}
-	responses.SuccessJSONResponse("receipt uploaded successfully", nil, http.StatusOK, w)
+
+	expenseID, err := strconv.Atoi(expenseIDStr)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	expenseTrip := domain.TripExpense{
+		TripID:    tripID,
+		ExpenseID: expenseID,
+		Cost:      cost,
+		ImageURL:  receiptURL,
+	}
+	res, err := h.service.CreateTripExpenseService(r.Context(), expenseTrip)
+	responses.SuccessJSONResponse("receipt uploaded successfully", res.TripID, http.StatusOK, w)
 }
 
 func (h *DriverHandler) GetExpenseTypes(w http.ResponseWriter, r *http.Request) {
