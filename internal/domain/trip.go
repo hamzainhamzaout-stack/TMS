@@ -8,3 +8,11 @@ type CreateTripParams struct {
 	ApprovedBy uuid.UUID `json:"approved_by"`
 	ExpenseIDs []int32   `json:"expense_ids"`
 }
+
+type TripExpense struct {
+	TripID    int     `json:"trip_id"`
+	ExpenseID int     `json:"expense_id"`
+	Cost      float64 `json:"cost"`
+	ImageURL  string  `json:"image_url"`
+	Remark    string  `json:"remark"`
+}

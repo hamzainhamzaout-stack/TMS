@@ -239,3 +239,8 @@ SET
 WHERE
     id = $1
 RETURNING *;
+
+-- name: CreateTripExpense :one
+INSERT INTO trip_expenses(trip_id, expenses_id, cost, receipt_url, remark)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING *;

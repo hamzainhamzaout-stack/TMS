@@ -5,12 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
 
 	"github.com/Robotech-Org/driver-management/internal/config"
 	"github.com/Robotech-Org/driver-management/internal/data/dm_svc_db"
 	"github.com/Robotech-Org/driver-management/internal/domain"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type DriverService struct {
@@ -137,29 +135,25 @@ func (s *DriverService) ChangeCarDriver(ctx context.Context, driverID int32, car
 
 func (s *DriverService) CreateTrip(ctx context.Context, trip domain.CreateTripParams) error {
 	s.logger.Info("Creating trip", "trip", trip)
-
-	totalCost := pgtype.Numeric{}
-	if err := totalCost.Scan(strconv.FormatFloat(trip.TotalCost, 'f', 2, 64)); err != nil {
-		return fmt.Errorf("failed to convert total_cost: %w", err)
-	}
 	tripReturning, err := s.queries.CreateTrip(ctx, dm_svc_db.CreateTripParams{
 		DriverID:   trip.DriverID,
-		TotalCost:  totalCost,
+		TotalCost:  trip.TotalCost,
 		ApprovedBy: trip.ApprovedBy,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create trip: %w", err)
 	}
 
-	for _, expense := range trip.ExpenseIDs {
-		if err := s.queries.AddExpensesToTrip(ctx, dm_svc_db.AddExpensesToTripParams{
-			TripID:     tripReturning.ID,
-			ExpensesID: expense,
-		}); err != nil {
-			return fmt.Errorf("failed to add expense: %w", err)
-		}
-	}
+	// for _, expense := range trip.ExpenseIDs {
+	// 	if err := s.queries.AddExpensesToTrip(ctx, dm_svc_db.AddExpensesToTripParams{
+	// 		TripID:     tripReturning.ID,
+	// 		ExpensesID: expense,
+	// 	}); err != nil {
+	// 		return fmt.Errorf("failed to add expense: %w", err)
+	// 	}
+	// }
 
+	s.logger.Info("Successfully created", "trip", tripReturning)
 	return nil
 }
 
@@ -224,4 +218,18 @@ func (s *DriverService) DeleteExpenseService(ctx context.Context, expenseID int3
 func (s *DriverService) GetStatsService(ctx context.Context) (dm_svc_db.GetDashboardCountsRow, error) {
 	s.logger.Info("Getting stats")
 	return s.queries.GetDashboardCounts(ctx)
+}
+
+func (s *DriverService) CreateTripExpenseService(
+	ctx context.Context,
+	tripExpense domain.TripExpense,
+) (dm_svc_db.TripExpense, error) {
+
+	return s.queries.CreateTripExpense(ctx, dm_svc_db.CreateTripExpenseParams{
+		TripID:     int32(tripExpense.TripID),
+		ExpensesID: int32(tripExpense.ExpenseID),
+		Cost:       tripExpense.Cost, // float64 now matches generated type
+		ReceiptUrl: &tripExpense.ImageURL,
+		Remark:     &tripExpense.Remark,
+	})
 }

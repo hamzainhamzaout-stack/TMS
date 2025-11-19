@@ -93,9 +93,8 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 		financeRoute.Route("/trip", func(r chi.Router) {
 			r.Get("/", di.DriverHandler.ListTrips)
 			r.Get("/{id}", di.DriverHandler.TripDetail)
-			r.Post("/{id}/upload-receipt", di.DriverHandler.UploadReceipt)
+			r.Post("/{id}", di.DriverHandler.CreateTripExpenseHandler)
 		})
-		// 2. Store payments made
 	})
 
 	router.Route("/user", func(userRoute chi.Router) {
