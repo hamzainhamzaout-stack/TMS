@@ -75,7 +75,7 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 			r.Patch("/{id}", di.DriverHandler.UpdateTrip)
 			r.Delete("/{id}", di.DriverHandler.DeleteTrip)
 		})
-		adminRoute.Route("/expense", func(r chi.Router) {
+		adminRoute.Route("/expense-type", func(r chi.Router) {
 			r.Get("/", di.DriverHandler.GetExpenseTypes)
 			r.Post("/", di.DriverHandler.CreateExpense)
 			r.Patch("/{id}", di.DriverHandler.UpdateExpense)
