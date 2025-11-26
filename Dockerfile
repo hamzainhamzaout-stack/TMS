@@ -26,7 +26,7 @@ COPY --from=builder /app/docs/swagger-ui ./docs/swagger-ui
 
 EXPOSE 8000
 
-CMD goose -dir ./migrations postgres "${GOOSE_DBSTRING}" up && ./driver-mgmt-svc
+CMD goose -dir ./migrations up && ./driver-mgmt-svc
 
 
 # FROM golang:1.24.2 AS builder
