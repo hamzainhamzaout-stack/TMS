@@ -14,6 +14,110 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type LedgerType string
+
+const (
+	LedgerTypeSALARYCREDIT  LedgerType = "SALARY_CREDIT"
+	LedgerTypeADVANCEDEBIT  LedgerType = "ADVANCE_DEBIT"
+	LedgerTypeTRIPALLOWANCE LedgerType = "TRIP_ALLOWANCE"
+)
+
+func (e *LedgerType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = LedgerType(s)
+	case string:
+		*e = LedgerType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for LedgerType: %T", src)
+	}
+	return nil
+}
+
+type NullLedgerType struct {
+	LedgerType LedgerType `json:"ledger_type"`
+	Valid      bool       `json:"valid"` // Valid is true if LedgerType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullLedgerType) Scan(value interface{}) error {
+	if value == nil {
+		ns.LedgerType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.LedgerType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullLedgerType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.LedgerType), nil
+}
+
+func (e LedgerType) Valid() bool {
+	switch e {
+	case LedgerTypeSALARYCREDIT,
+		LedgerTypeADVANCEDEBIT,
+		LedgerTypeTRIPALLOWANCE:
+		return true
+	}
+	return false
+}
+
+type MaintenanceType string
+
+const (
+	MaintenanceTypePREVENTIVE MaintenanceType = "PREVENTIVE"
+	MaintenanceTypeCORRECTIVE MaintenanceType = "CORRECTIVE"
+)
+
+func (e *MaintenanceType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = MaintenanceType(s)
+	case string:
+		*e = MaintenanceType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for MaintenanceType: %T", src)
+	}
+	return nil
+}
+
+type NullMaintenanceType struct {
+	MaintenanceType MaintenanceType `json:"maintenance_type"`
+	Valid           bool            `json:"valid"` // Valid is true if MaintenanceType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullMaintenanceType) Scan(value interface{}) error {
+	if value == nil {
+		ns.MaintenanceType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.MaintenanceType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullMaintenanceType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.MaintenanceType), nil
+}
+
+func (e MaintenanceType) Valid() bool {
+	switch e {
+	case MaintenanceTypePREVENTIVE,
+		MaintenanceTypeCORRECTIVE:
+		return true
+	}
+	return false
+}
+
 type OtpStatus string
 
 const (
@@ -62,6 +166,173 @@ func (e OtpStatus) Valid() bool {
 	case OtpStatusActive,
 		OtpStatusUsed,
 		OtpStatusExpired:
+		return true
+	}
+	return false
+}
+
+type PaymentStatus string
+
+const (
+	PaymentStatusPENDING PaymentStatus = "PENDING"
+	PaymentStatusPARTIAL PaymentStatus = "PARTIAL"
+	PaymentStatusPAID    PaymentStatus = "PAID"
+)
+
+func (e *PaymentStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PaymentStatus(s)
+	case string:
+		*e = PaymentStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PaymentStatus: %T", src)
+	}
+	return nil
+}
+
+type NullPaymentStatus struct {
+	PaymentStatus PaymentStatus `json:"payment_status"`
+	Valid         bool          `json:"valid"` // Valid is true if PaymentStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPaymentStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.PaymentStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PaymentStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPaymentStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PaymentStatus), nil
+}
+
+func (e PaymentStatus) Valid() bool {
+	switch e {
+	case PaymentStatusPENDING,
+		PaymentStatusPARTIAL,
+		PaymentStatusPAID:
+		return true
+	}
+	return false
+}
+
+type TransactionCategory string
+
+const (
+	TransactionCategoryINCOMEDEPOSIT        TransactionCategory = "INCOME_DEPOSIT"
+	TransactionCategoryINCOMEFINAL          TransactionCategory = "INCOME_FINAL"
+	TransactionCategoryEXPENSETRIP          TransactionCategory = "EXPENSE_TRIP"
+	TransactionCategoryEXPENSEOVERHEAD      TransactionCategory = "EXPENSE_OVERHEAD"
+	TransactionCategoryEXPENSEMAINTENANCE   TransactionCategory = "EXPENSE_MAINTENANCE"
+	TransactionCategoryEXPENSEDRIVERPAYROLL TransactionCategory = "EXPENSE_DRIVER_PAYROLL"
+)
+
+func (e *TransactionCategory) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TransactionCategory(s)
+	case string:
+		*e = TransactionCategory(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TransactionCategory: %T", src)
+	}
+	return nil
+}
+
+type NullTransactionCategory struct {
+	TransactionCategory TransactionCategory `json:"transaction_category"`
+	Valid               bool                `json:"valid"` // Valid is true if TransactionCategory is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTransactionCategory) Scan(value interface{}) error {
+	if value == nil {
+		ns.TransactionCategory, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TransactionCategory.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTransactionCategory) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TransactionCategory), nil
+}
+
+func (e TransactionCategory) Valid() bool {
+	switch e {
+	case TransactionCategoryINCOMEDEPOSIT,
+		TransactionCategoryINCOMEFINAL,
+		TransactionCategoryEXPENSETRIP,
+		TransactionCategoryEXPENSEOVERHEAD,
+		TransactionCategoryEXPENSEMAINTENANCE,
+		TransactionCategoryEXPENSEDRIVERPAYROLL:
+		return true
+	}
+	return false
+}
+
+type TripStatus string
+
+const (
+	TripStatusPLANNED   TripStatus = "PLANNED"
+	TripStatusCONFIRMED TripStatus = "CONFIRMED"
+	TripStatusCOMPLETED TripStatus = "COMPLETED"
+	TripStatusCANCELLED TripStatus = "CANCELLED"
+)
+
+func (e *TripStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TripStatus(s)
+	case string:
+		*e = TripStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TripStatus: %T", src)
+	}
+	return nil
+}
+
+type NullTripStatus struct {
+	TripStatus TripStatus `json:"trip_status"`
+	Valid      bool       `json:"valid"` // Valid is true if TripStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTripStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.TripStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TripStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTripStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TripStatus), nil
+}
+
+func (e TripStatus) Valid() bool {
+	switch e {
+	case TripStatusPLANNED,
+		TripStatusCONFIRMED,
+		TripStatusCOMPLETED,
+		TripStatusCANCELLED:
 		return true
 	}
 	return false
@@ -156,9 +427,31 @@ type Driver struct {
 	UpdatedAt     pgtype.Timestamp `json:"updated_at"`
 }
 
+type DriverLedger struct {
+	ID            int32            `json:"id"`
+	DriverID      int32            `json:"driver_id"`
+	EntryType     string           `json:"entry_type"`
+	Amount        float64          `json:"amount"`
+	RelatedTripID *int32           `json:"related_trip_id"`
+	Notes         *string          `json:"notes"`
+	CreatedAt     pgtype.Timestamp `json:"created_at"`
+}
+
 type Expense struct {
 	ID   int32  `json:"id"`
 	Name string `json:"name"`
+}
+
+type MaintenanceLog struct {
+	ID              int32            `json:"id"`
+	CarID           int32            `json:"car_id"`
+	MaintenanceType MaintenanceType  `json:"maintenance_type"`
+	MaintenanceName string           `json:"maintenance_name"`
+	Cost            float64          `json:"cost"`
+	Description     string           `json:"description"`
+	ServiceProvider *string          `json:"service_provider"`
+	ServiceDate     pgtype.Date      `json:"service_date"`
+	CreatedAt       pgtype.Timestamp `json:"created_at"`
 }
 
 type Otp struct {
@@ -177,15 +470,33 @@ type Role struct {
 	Name string `json:"name"`
 }
 
+type Transaction struct {
+	ID              int32               `json:"id"`
+	TripID          *int32              `json:"trip_id"`
+	Amount          float64             `json:"amount"`
+	Category        TransactionCategory `json:"category"`
+	PaymentMethod   string              `json:"payment_method"`
+	HandledBy       pgtype.UUID         `json:"handled_by"`
+	HandlerName     *string             `json:"handler_name"`
+	Notes           *string             `json:"notes"`
+	TransactionDate pgtype.Timestamp    `json:"transaction_date"`
+	CreatedAt       pgtype.Timestamp    `json:"created_at"`
+}
+
 type Trip struct {
-	ID         int32            `json:"id"`
-	DriverID   int32            `json:"driver_id"`
-	TotalCost  float64          `json:"total_cost"`
-	ReceiptUrl *string          `json:"receipt_url"`
-	ApprovedBy uuid.UUID        `json:"approved_by"`
-	Isactive   bool             `json:"isactive"`
-	CreatedAt  pgtype.Timestamp `json:"created_at"`
-	UpdatedAt  pgtype.Timestamp `json:"updated_at"`
+	ID            int32               `json:"id"`
+	DriverID      int32               `json:"driver_id"`
+	TotalCost     float64             `json:"total_cost"`
+	ReceiptUrl    *string             `json:"receipt_url"`
+	ApprovedBy    uuid.UUID           `json:"approved_by"`
+	Isactive      bool                `json:"isactive"`
+	CreatedAt     pgtype.Timestamp    `json:"created_at"`
+	UpdatedAt     pgtype.Timestamp    `json:"updated_at"`
+	ClientName    *string             `json:"client_name"`
+	TotalQuote    decimal.NullDecimal `json:"total_quote"`
+	PaidAmount    decimal.NullDecimal `json:"paid_amount"`
+	PaymentStatus NullPaymentStatus   `json:"payment_status"`
+	Status        NullTripStatus      `json:"status"`
 }
 
 type TripExpense struct {

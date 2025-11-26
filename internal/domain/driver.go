@@ -24,3 +24,10 @@ type UpdateDriverRequest struct {
 	PhoneNumber   *string `json:"phone_number,omitempty"`
 	LicenseNumber *string `json:"license_number,omitempty"`
 }
+
+type DriverLedger struct {
+	DriverID  int32   `json:"driver_id"`
+	EntryType string  `json:"entry_type"`
+	Amount    float64 `json:"amount"`
+	Notes     string  `json:"notes"`
+}
