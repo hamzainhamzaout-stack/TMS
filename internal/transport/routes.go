@@ -29,6 +29,14 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 		responses.SuccessJSONResponse(message, nil, http.StatusOK, w)
 	})
 
+	router.Get("/swagger.yaml", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./docs/swagger.yaml")
+	})
+
+	// Serve the Swagger UI
+	fs := http.FileServer(http.Dir("./docs/swagger-ui"))
+	router.Handle("/swagger/*", http.StripPrefix("/swagger/", fs))
+
 	router.Group(func(r chi.Router) {
 		r.Post("/login", di.AuthHandler.Login)
 		r.Post("/refresh", di.AuthHandler.RefreshTokenHandler)
@@ -60,6 +68,7 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 			r.Post("/", di.DriverHandler.CreateDriver)
 			r.Patch("/{id}", di.DriverHandler.UpdateDriver)
 			r.Delete("/{id}", di.DriverHandler.DeleteDriver)
+			r.Post("/{id}/payroll", di.DriverHandler.AddPayroll)
 		})
 		adminRoute.Route("/cars", func(r chi.Router) {
 			r.Get("/", di.DriverHandler.ListCars)
@@ -84,17 +93,24 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 		adminRoute.Route("/stats", func(r chi.Router) {
 			r.Get("/", di.DriverHandler.GetStats)
 		})
+		adminRoute.Route("/income", func(r chi.Router) {
+			r.Post("/advance", di.DriverHandler.RegisterAdvancePayment)
+			r.Post("/settlement", di.DriverHandler.RegisterFinalPayment)
+			r.Post("/maintenance", di.DriverHandler.RegisterMaintenance)
+			r.Get("/summary", di.DriverHandler.GetFinancialSummary)
+			r.Get("/trip/{tripId}", di.DriverHandler.GetTripProfitability)
+		})
 	})
 
 	router.Route("/finance", func(financeRoute chi.Router) {
 		// financeRoute.Use(auth.AuthMiddleware)
-		// What I want the finance manager to do is
-		// 1. Get Trips with their expenses
 		financeRoute.Route("/trip", func(r chi.Router) {
 			r.Get("/", di.DriverHandler.ListTrips)
 			r.Get("/{id}", di.DriverHandler.TripDetail)
 			r.Post("/{id}", di.DriverHandler.CreateTripExpenseHandler)
 		})
+		financeRoute.Post("/driver-pay", di.DriverHandler.RegisterDriverPayment)
+		financeRoute.Post("/trip-overhead", di.DriverHandler.RegisterTripOverhead)
 	})
 
 	router.Route("/user", func(userRoute chi.Router) {

@@ -244,3 +244,69 @@ RETURNING *;
 INSERT INTO trip_expenses(trip_id, expenses_id, cost, receipt_url, remark)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
+
+-- name: CreateTransaction :one
+INSERT INTO transactions (
+    trip_id,
+    amount,
+    category,
+    payment_method,
+    handled_by,
+    handler_name,
+    notes
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7
+) RETURNING *;
+-- name: UpdateTripPaymentState :exec
+UPDATE trip
+SET
+    paid_amount = paid_amount + $2,
+    payment_status = CASE
+        WHEN (paid_amount + $2) >= total_quote THEN 'PAID'::payment_status
+        ELSE 'PARTIAL'::payment_status
+    END,
+    status = CASE
+        WHEN status = 'PLANNED'::trip_status THEN 'CONFIRMED'::trip_status
+        ELSE status
+    END,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1;
+-- name: CreateMaintenance :one
+INSERT INTO maintenance_logs (car_id, maintenance_type, cost, description, maintenance_name)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING *;
+
+-- name: GetFinancialSummary :one
+-- TODO: maintenance_cost should be calculated from the maintenance_logs table.
+SELECT
+    COALESCE(SUM(CASE WHEN category = 'INCOME_DEPOSIT' OR category = 'INCOME_FINAL' THEN amount ELSE 0 END), 0) AS total_revenue,
+    COALESCE(SUM(CASE WHEN category = 'EXPENSE_MAINTENANCE' THEN amount ELSE 0 END), 0) AS maintenance_cost,
+    COALESCE(SUM(CASE WHEN category = 'EXPENSE_TRIP' THEN amount ELSE 0 END), 0) AS trip_overheads,
+    COALESCE(SUM(CASE WHEN category = 'EXPENSE_DRIVER_PAYROLL' THEN amount ELSE 0 END), 0) AS driver_payroll
+FROM
+    transactions;
+
+-- name: GetTripProfitability :one
+SELECT
+    t.id AS trip_id,
+    COALESCE(SUM(CASE WHEN tx.category = 'INCOME_DEPOSIT' OR tx.category = 'INCOME_FINAL' THEN tx.amount ELSE 0 END), 0) AS total_revenue,
+    COALESCE(SUM(CASE WHEN tx.category = 'EXPENSE_TRIP' OR tx.category = 'EXPENSE_OVERHEAD' THEN tx.amount ELSE 0 END), 0) AS total_expenses
+FROM
+    trip t
+LEFT JOIN
+    transactions tx ON t.id = tx.trip_id
+WHERE
+    t.id = $1
+GROUP BY
+    t.id;
+
+
+-- name: GetTripTransactionDetail :one
+SELECT *
+FROM transactions
+WHERE trip_id = $1;
+
+-- name: DriverLedger :one
+INSERT INTO driver_ledger (driver_id, entry_type, amount, related_trip_id, notes)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING *;

@@ -156,6 +156,43 @@ func (q *Queries) CreateExpenseType(ctx context.Context, name string) (Expense, 
 	return i, err
 }
 
+const createMaintenance = `-- name: CreateMaintenance :one
+INSERT INTO maintenance_logs (car_id, maintenance_type, cost, description, maintenance_name)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, car_id, maintenance_type, maintenance_name, cost, description, service_provider, service_date, created_at
+`
+
+type CreateMaintenanceParams struct {
+	CarID           int32           `json:"car_id"`
+	MaintenanceType MaintenanceType `json:"maintenance_type"`
+	Cost            float64         `json:"cost"`
+	Description     string          `json:"description"`
+	MaintenanceName string          `json:"maintenance_name"`
+}
+
+func (q *Queries) CreateMaintenance(ctx context.Context, arg CreateMaintenanceParams) (MaintenanceLog, error) {
+	row := q.db.QueryRow(ctx, createMaintenance,
+		arg.CarID,
+		arg.MaintenanceType,
+		arg.Cost,
+		arg.Description,
+		arg.MaintenanceName,
+	)
+	var i MaintenanceLog
+	err := row.Scan(
+		&i.ID,
+		&i.CarID,
+		&i.MaintenanceType,
+		&i.MaintenanceName,
+		&i.Cost,
+		&i.Description,
+		&i.ServiceProvider,
+		&i.ServiceDate,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createOTP = `-- name: CreateOTP :one
 INSERT INTO otps (user_id, otp_hash, expires_at, delivery_method)
 VALUES ($1, $2, $3, $4)
@@ -203,10 +240,60 @@ func (q *Queries) CreateRole(ctx context.Context, name string) (Role, error) {
 	return i, err
 }
 
+const createTransaction = `-- name: CreateTransaction :one
+INSERT INTO transactions (
+    trip_id,
+    amount,
+    category,
+    payment_method,
+    handled_by,
+    handler_name,
+    notes
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7
+) RETURNING id, trip_id, amount, category, payment_method, handled_by, handler_name, notes, transaction_date, created_at
+`
+
+type CreateTransactionParams struct {
+	TripID        *int32              `json:"trip_id"`
+	Amount        float64             `json:"amount"`
+	Category      TransactionCategory `json:"category"`
+	PaymentMethod string              `json:"payment_method"`
+	HandledBy     pgtype.UUID         `json:"handled_by"`
+	HandlerName   *string             `json:"handler_name"`
+	Notes         *string             `json:"notes"`
+}
+
+func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error) {
+	row := q.db.QueryRow(ctx, createTransaction,
+		arg.TripID,
+		arg.Amount,
+		arg.Category,
+		arg.PaymentMethod,
+		arg.HandledBy,
+		arg.HandlerName,
+		arg.Notes,
+	)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.TripID,
+		&i.Amount,
+		&i.Category,
+		&i.PaymentMethod,
+		&i.HandledBy,
+		&i.HandlerName,
+		&i.Notes,
+		&i.TransactionDate,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createTrip = `-- name: CreateTrip :one
 INSERT INTO trip(driver_id, total_cost, approved_by)
 VALUES($1, $2, $3)
-RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at
+RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status
 `
 
 type CreateTripParams struct {
@@ -227,6 +314,11 @@ func (q *Queries) CreateTrip(ctx context.Context, arg CreateTripParams) (Trip, e
 		&i.Isactive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ClientName,
+		&i.TotalQuote,
+		&i.PaidAmount,
+		&i.PaymentStatus,
+		&i.Status,
 	)
 	return i, err
 }
@@ -354,6 +446,41 @@ func (q *Queries) DeleteTrip(ctx context.Context, id int32) error {
 	return err
 }
 
+const driverLedger = `-- name: DriverLedger :one
+INSERT INTO driver_ledger (driver_id, entry_type, amount, related_trip_id, notes)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, driver_id, entry_type, amount, related_trip_id, notes, created_at
+`
+
+type DriverLedgerParams struct {
+	DriverID      int32   `json:"driver_id"`
+	EntryType     string  `json:"entry_type"`
+	Amount        float64 `json:"amount"`
+	RelatedTripID *int32  `json:"related_trip_id"`
+	Notes         *string `json:"notes"`
+}
+
+func (q *Queries) DriverLedger(ctx context.Context, arg DriverLedgerParams) (DriverLedger, error) {
+	row := q.db.QueryRow(ctx, driverLedger,
+		arg.DriverID,
+		arg.EntryType,
+		arg.Amount,
+		arg.RelatedTripID,
+		arg.Notes,
+	)
+	var i DriverLedger
+	err := row.Scan(
+		&i.ID,
+		&i.DriverID,
+		&i.EntryType,
+		&i.Amount,
+		&i.RelatedTripID,
+		&i.Notes,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getDashboardCounts = `-- name: GetDashboardCounts :one
 SELECT
     COALESCE((SELECT COUNT(*) FROM driver), 0) AS driver_count,
@@ -432,6 +559,36 @@ func (q *Queries) GetExpenseTypes(ctx context.Context) ([]Expense, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const getFinancialSummary = `-- name: GetFinancialSummary :one
+SELECT
+    COALESCE(SUM(CASE WHEN category = 'INCOME_DEPOSIT' OR category = 'INCOME_FINAL' THEN amount ELSE 0 END), 0) AS total_revenue,
+    COALESCE(SUM(CASE WHEN category = 'EXPENSE_MAINTENANCE' THEN amount ELSE 0 END), 0) AS maintenance_cost,
+    COALESCE(SUM(CASE WHEN category = 'EXPENSE_TRIP' THEN amount ELSE 0 END), 0) AS trip_overheads,
+    COALESCE(SUM(CASE WHEN category = 'EXPENSE_DRIVER_PAYROLL' THEN amount ELSE 0 END), 0) AS driver_payroll
+FROM
+    transactions
+`
+
+type GetFinancialSummaryRow struct {
+	TotalRevenue    interface{} `json:"total_revenue"`
+	MaintenanceCost interface{} `json:"maintenance_cost"`
+	TripOverheads   interface{} `json:"trip_overheads"`
+	DriverPayroll   interface{} `json:"driver_payroll"`
+}
+
+// TODO: maintenance_cost should be calculated from the maintenance_logs table.
+func (q *Queries) GetFinancialSummary(ctx context.Context) (GetFinancialSummaryRow, error) {
+	row := q.db.QueryRow(ctx, getFinancialSummary)
+	var i GetFinancialSummaryRow
+	err := row.Scan(
+		&i.TotalRevenue,
+		&i.MaintenanceCost,
+		&i.TripOverheads,
+		&i.DriverPayroll,
+	)
+	return i, err
 }
 
 const getMyRole = `-- name: GetMyRole :one
@@ -534,8 +691,60 @@ func (q *Queries) GetTripDetail(ctx context.Context, id int32) (GetTripDetailRow
 	return i, err
 }
 
+const getTripProfitability = `-- name: GetTripProfitability :one
+SELECT
+    t.id AS trip_id,
+    COALESCE(SUM(CASE WHEN tx.category = 'INCOME_DEPOSIT' OR tx.category = 'INCOME_FINAL' THEN tx.amount ELSE 0 END), 0) AS total_revenue,
+    COALESCE(SUM(CASE WHEN tx.category = 'EXPENSE_TRIP' OR tx.category = 'EXPENSE_OVERHEAD' THEN tx.amount ELSE 0 END), 0) AS total_expenses
+FROM
+    trip t
+LEFT JOIN
+    transactions tx ON t.id = tx.trip_id
+WHERE
+    t.id = $1
+GROUP BY
+    t.id
+`
+
+type GetTripProfitabilityRow struct {
+	TripID        int32       `json:"trip_id"`
+	TotalRevenue  interface{} `json:"total_revenue"`
+	TotalExpenses interface{} `json:"total_expenses"`
+}
+
+func (q *Queries) GetTripProfitability(ctx context.Context, id int32) (GetTripProfitabilityRow, error) {
+	row := q.db.QueryRow(ctx, getTripProfitability, id)
+	var i GetTripProfitabilityRow
+	err := row.Scan(&i.TripID, &i.TotalRevenue, &i.TotalExpenses)
+	return i, err
+}
+
+const getTripTransactionDetail = `-- name: GetTripTransactionDetail :one
+SELECT id, trip_id, amount, category, payment_method, handled_by, handler_name, notes, transaction_date, created_at
+FROM transactions
+WHERE trip_id = $1
+`
+
+func (q *Queries) GetTripTransactionDetail(ctx context.Context, tripID *int32) (Transaction, error) {
+	row := q.db.QueryRow(ctx, getTripTransactionDetail, tripID)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.TripID,
+		&i.Amount,
+		&i.Category,
+		&i.PaymentMethod,
+		&i.HandledBy,
+		&i.HandlerName,
+		&i.Notes,
+		&i.TransactionDate,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getTrips = `-- name: GetTrips :many
-SELECT id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at
+SELECT id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status
 FROM trip
 `
 
@@ -557,6 +766,11 @@ func (q *Queries) GetTrips(ctx context.Context) ([]Trip, error) {
 			&i.Isactive,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ClientName,
+			&i.TotalQuote,
+			&i.PaidAmount,
+			&i.PaymentStatus,
+			&i.Status,
 		); err != nil {
 			return nil, err
 		}
@@ -569,7 +783,7 @@ func (q *Queries) GetTrips(ctx context.Context) ([]Trip, error) {
 }
 
 const getTripsByDriver = `-- name: GetTripsByDriver :many
-SELECT id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at
+SELECT id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status
 FROM trip
 WHERE driver_id = $1
 `
@@ -592,6 +806,11 @@ func (q *Queries) GetTripsByDriver(ctx context.Context, driverID int32) ([]Trip,
 			&i.Isactive,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ClientName,
+			&i.TotalQuote,
+			&i.PaidAmount,
+			&i.PaymentStatus,
+			&i.Status,
 		); err != nil {
 			return nil, err
 		}
@@ -948,7 +1167,7 @@ const updateTrip = `-- name: UpdateTrip :one
 UPDATE trip
 SET total_cost = $2, approved_by = $3, created_at = $4, updated_at = $5
 WHERE id = $1
-RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at
+RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status
 `
 
 type UpdateTripParams struct {
@@ -977,6 +1196,11 @@ func (q *Queries) UpdateTrip(ctx context.Context, arg UpdateTripParams) (Trip, e
 		&i.Isactive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ClientName,
+		&i.TotalQuote,
+		&i.PaidAmount,
+		&i.PaymentStatus,
+		&i.Status,
 	)
 	return i, err
 }
@@ -985,7 +1209,7 @@ const updateTripDriver = `-- name: UpdateTripDriver :one
 UPDATE trip
 SET driver_id = $2
 WHERE id = $1
-RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at
+RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status
 `
 
 type UpdateTripDriverParams struct {
@@ -1005,8 +1229,39 @@ func (q *Queries) UpdateTripDriver(ctx context.Context, arg UpdateTripDriverPara
 		&i.Isactive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ClientName,
+		&i.TotalQuote,
+		&i.PaidAmount,
+		&i.PaymentStatus,
+		&i.Status,
 	)
 	return i, err
+}
+
+const updateTripPaymentState = `-- name: UpdateTripPaymentState :exec
+UPDATE trip
+SET
+    paid_amount = paid_amount + $2,
+    payment_status = CASE
+        WHEN (paid_amount + $2) >= total_quote THEN 'PAID'::payment_status
+        ELSE 'PARTIAL'::payment_status
+    END,
+    status = CASE
+        WHEN status = 'PLANNED'::trip_status THEN 'CONFIRMED'::trip_status
+        ELSE status
+    END,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+type UpdateTripPaymentStateParams struct {
+	ID         int32               `json:"id"`
+	PaidAmount decimal.NullDecimal `json:"paid_amount"`
+}
+
+func (q *Queries) UpdateTripPaymentState(ctx context.Context, arg UpdateTripPaymentStateParams) error {
+	_, err := q.db.Exec(ctx, updateTripPaymentState, arg.ID, arg.PaidAmount)
+	return err
 }
 
 const updateTripReceiptURL = `-- name: UpdateTripReceiptURL :exec

@@ -3,6 +3,7 @@ package driver
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -97,6 +98,25 @@ func (h *DriverHandler) DeleteDriver(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	responses.SuccessJSONResponse("deleted successfully", nil, http.StatusOK, w)
+}
+
+func (h *DriverHandler) AddPayroll(w http.ResponseWriter, r *http.Request) {
+	driverID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	var req domain.DriverLedger
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	err = h.service.AddPayrollService(r.Context(), int32(driverID), &req)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+	responses.SuccessJSONResponse("added successfully", nil, http.StatusOK, w)
 }
 
 func (h *DriverHandler) ListCars(w http.ResponseWriter, r *http.Request) {
@@ -496,4 +516,136 @@ func (h *DriverHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	responses.SuccessJSONResponse("stats retrieved successfully", stats, http.StatusOK, w)
+}
+
+func (h *DriverHandler) RegisterAdvancePayment(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Registering advance payments")
+
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		responses.ErrorJSONResponse(errors.New("authentication required"), http.StatusUnauthorized, w, nil)
+		return
+	}
+
+	var req domain.Transaction
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	transaction, err := h.service.RegisterAdvancePaymentService(r.Context(), req, userID)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+	responses.SuccessJSONResponse("transaction created successfully", transaction, http.StatusOK, w)
+}
+
+func (h *DriverHandler) RegisterFinalPayment(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Registering final payments")
+
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok {
+		responses.ErrorJSONResponse(fmt.Errorf("unauthorized action"), http.StatusUnauthorized, w, nil)
+		return
+	}
+
+	var req domain.Transaction
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	transaction, err := h.service.RegisterFinalPaymentService(r.Context(), req, userID)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+	responses.SuccessJSONResponse("transaction created successfully", transaction, http.StatusOK, w)
+}
+
+func (h *DriverHandler) RegisterMaintenance(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Registering maintenance")
+
+	var req domain.MaintenanceAddition
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	maintenance, err := h.service.RegisterMaintenanceService(r.Context(), req)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+	responses.SuccessJSONResponse("maintenance created successfully", maintenance, http.StatusOK, w)
+}
+
+func (h *DriverHandler) GetFinancialSummary(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Getting financial summary")
+
+	summary, err := h.service.GetFinancialSummaryService(r.Context())
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+	responses.SuccessJSONResponse("financial summary retrieved successfully", summary, http.StatusOK, w)
+}
+
+func (h *DriverHandler) GetTripProfitability(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Getting trip profitability")
+
+	tripID, err := strconv.Atoi(chi.URLParam(r, "tripId"))
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	profitability, err := h.service.GetTripProfitabilityService(r.Context(), int32(tripID))
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+	responses.SuccessJSONResponse("trip profitability retrieved successfully", profitability, http.StatusOK, w)
+}
+
+func (h *DriverHandler) RegisterDriverPayment(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Registering driver payment")
+
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok {
+		responses.ErrorJSONResponse(fmt.Errorf("unauthorized action"), http.StatusUnauthorized, w, nil)
+		return
+	}
+
+	var req domain.DriverPayment
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	payment, err := h.service.RegisterDriverPaymentService(r.Context(), req, userID)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+	responses.SuccessJSONResponse("driver payment created successfully", payment, http.StatusOK, w)
+}
+
+func (h *DriverHandler) RegisterTripOverhead(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Registering trip overhead")
+
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok {
+		responses.ErrorJSONResponse(fmt.Errorf("unauthorized action"), http.StatusUnauthorized, w, nil)
+		return
+	}
+
+	var req domain.TripOverhead
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	overhead, err := h.service.RegisterTripOverheadService(r.Context(), req, userID)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+	responses.SuccessJSONResponse("trip overhead created successfully", overhead, http.StatusOK, w)
 }

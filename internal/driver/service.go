@@ -9,6 +9,9 @@ import (
 	"github.com/Robotech-Org/driver-management/internal/config"
 	"github.com/Robotech-Org/driver-management/internal/data/dm_svc_db"
 	"github.com/Robotech-Org/driver-management/internal/domain"
+	"github.com/google/uuid"
+	"github.com/greatcloak/decimal"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type DriverService struct {
@@ -83,6 +86,30 @@ func (s *DriverService) DeleteDriver(ctx context.Context, driverID int32) error 
 	return s.queries.DeleteDriver(ctx, driverID)
 }
 
+func (s *DriverService) AddPayrollService(ctx context.Context, driverID int32, req *domain.DriverLedger) error {
+	s.logger.Info("Adding payroll", "driverID", driverID)
+	_, err := s.queries.DriverLedger(ctx, dm_svc_db.DriverLedgerParams{
+		DriverID:      req.DriverID,
+		EntryType:     req.EntryType,
+		Amount:        req.Amount,
+		RelatedTripID: nil,
+		Notes:         &req.Notes,
+	})
+	if err != nil {
+		return err
+	}
+
+	txnData, err := s.queries.CreateTransaction(ctx, dm_svc_db.CreateTransactionParams{
+		Category: dm_svc_db.TransactionCategoryEXPENSEDRIVERPAYROLL,
+		Amount:   req.Amount,
+	})
+	if err != nil {
+		return err
+	}
+	s.logger.Info("Transaction created", "txnID", txnData.ID)
+	return nil
+}
+
 func (s *DriverService) ListCars(ctx context.Context) ([]dm_svc_db.Car, error) {
 	s.logger.Info("Listing cars")
 	return s.queries.ListCars(ctx)
@@ -152,6 +179,33 @@ func (s *DriverService) CreateTrip(ctx context.Context, trip domain.CreateTripPa
 	// 		return fmt.Errorf("failed to add expense: %w", err)
 	// 	}
 	// }
+
+	tripID := tripReturning.ID
+	notes := "Initial trip cost"
+
+	var handlerName string
+	userProfile, err := s.queries.UserProfile(ctx, trip.ApprovedBy)
+	if err != nil {
+		s.logger.Error("failed to get user profile for handler name", "error", err)
+	} else {
+		handlerName = userProfile.FirstName + " " + userProfile.LastName
+	}
+
+	_, err = s.queries.CreateTransaction(ctx, dm_svc_db.CreateTransactionParams{
+		TripID:        &tripID,
+		Amount:        trip.TotalCost,
+		Category:      dm_svc_db.TransactionCategoryEXPENSETRIP,
+		PaymentMethod: "system",
+		HandledBy: pgtype.UUID{
+			Bytes: tripReturning.ApprovedBy,
+			Valid: true,
+		},
+		HandlerName: &handlerName,
+		Notes:       &notes,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create transaction for trip cost: %w", err)
+	}
 
 	s.logger.Info("Successfully created", "trip", tripReturning)
 	return nil
@@ -232,4 +286,237 @@ func (s *DriverService) CreateTripExpenseService(
 		ReceiptUrl: &tripExpense.ImageURL,
 		Remark:     &tripExpense.Remark,
 	})
+}
+
+func (s *DriverService) RegisterAdvancePaymentService(ctx context.Context, transaction domain.Transaction, userID string) (dm_svc_db.Transaction, error) {
+	userUUID, _ := uuid.Parse(userID)
+	tripID := int32(transaction.TripID)
+	txRecord, err := s.queries.CreateTransaction(ctx, dm_svc_db.CreateTransactionParams{
+		TripID:        &tripID,
+		Amount:        transaction.Amount,
+		Category:      dm_svc_db.TransactionCategoryINCOMEDEPOSIT,
+		PaymentMethod: transaction.Method,
+		HandledBy: pgtype.UUID{
+			Bytes: userUUID,
+			Valid: true,
+		}, // The missing piece
+		HandlerName: &transaction.ReceiverName, // You should fetch real name
+		Notes:       &transaction.Notes,
+	})
+	if err != nil {
+		return dm_svc_db.Transaction{}, err
+	}
+
+	paidAmountDecimal := decimal.NewFromFloat(transaction.Amount)
+
+	err = s.queries.UpdateTripPaymentState(ctx, dm_svc_db.UpdateTripPaymentStateParams{
+		ID: tripID,
+		PaidAmount: decimal.NullDecimal{
+			Decimal: paidAmountDecimal,
+			Valid:   true,
+		},
+	})
+	if err != nil {
+		return dm_svc_db.Transaction{}, fmt.Errorf("failed to update trip status: %v", err)
+	}
+	return txRecord, nil
+}
+
+func (s *DriverService) RegisterFinalPaymentService(ctx context.Context, transaction domain.Transaction, userID string) (dm_svc_db.Transaction, error) {
+	userUUID, _ := uuid.Parse(userID)
+	tripID := int32(transaction.TripID)
+	txRecord, err := s.queries.CreateTransaction(ctx, dm_svc_db.CreateTransactionParams{
+		TripID:        &tripID,
+		Amount:        transaction.Amount,
+		Category:      dm_svc_db.TransactionCategoryINCOMEFINAL,
+		PaymentMethod: transaction.Method,
+		HandledBy: pgtype.UUID{
+			Bytes: userUUID,
+			Valid: true,
+		},
+		HandlerName: &transaction.ReceiverName,
+		Notes:       &transaction.Notes,
+	})
+	if err != nil {
+		return dm_svc_db.Transaction{}, err
+	}
+
+	trip, err := s.queries.GetTripTransactionDetail(ctx, &tripID)
+	if err != nil {
+		return dm_svc_db.Transaction{}, err
+	}
+
+	currentPaidAmount := decimal.NewFromFloat(trip.Amount)
+	newPaidAmount := currentPaidAmount.Add(decimal.NewFromFloat(transaction.Amount))
+
+	err = s.queries.UpdateTripPaymentState(ctx, dm_svc_db.UpdateTripPaymentStateParams{
+		ID: tripID,
+		PaidAmount: decimal.NullDecimal{
+			Decimal: newPaidAmount,
+			Valid:   true,
+		},
+	})
+	if err != nil {
+		return dm_svc_db.Transaction{}, fmt.Errorf("failed to update trip status: %v", err)
+	}
+
+	return txRecord, nil
+}
+
+func (s *DriverService) RegisterMaintenanceService(ctx context.Context, maintenance domain.MaintenanceAddition) (dm_svc_db.MaintenanceLog, error) {
+	var maintenanceType dm_svc_db.MaintenanceType
+	switch maintenance.Type {
+	case "CORRECTIVE":
+		maintenanceType = dm_svc_db.MaintenanceTypeCORRECTIVE
+	case "PREVENTIVE":
+		maintenanceType = dm_svc_db.MaintenanceTypePREVENTIVE
+	default:
+		return dm_svc_db.MaintenanceLog{}, fmt.Errorf("invalid maintenance type: %s", maintenance.Type)
+	}
+	maintenanceInfo, err := s.queries.CreateMaintenance(ctx, dm_svc_db.CreateMaintenanceParams{
+		CarID:           maintenance.CarID,
+		MaintenanceType: maintenanceType,
+		Cost:            maintenance.Cost,
+		MaintenanceName: maintenance.Name,
+		Description:     maintenance.Description,
+	})
+	if err != nil {
+		return dm_svc_db.MaintenanceLog{}, fmt.Errorf("failed to create maintenance record: %v", err)
+	}
+
+	txRecord, err := s.queries.CreateTransaction(ctx, dm_svc_db.CreateTransactionParams{
+		Category: dm_svc_db.TransactionCategoryEXPENSEMAINTENANCE,
+		Amount:   maintenance.Cost,
+	})
+	if err != nil {
+		return dm_svc_db.MaintenanceLog{}, fmt.Errorf("failed to create transaction record: %v", err)
+	}
+	s.logger.Info("Transaction created successfully", "transaction_id", txRecord.ID)
+
+	return maintenanceInfo, nil
+}
+
+func toFloat64(v interface{}) (float64, error) {
+	switch value := v.(type) {
+	case pgtype.Numeric:
+		f, err := value.Float64Value()
+		if err != nil {
+			return 0, err
+		}
+		return f.Float64, nil
+	case decimal.NullDecimal:
+		if value.Valid {
+			return value.Decimal.InexactFloat64(), nil
+		}
+		return 0.0, nil
+	default:
+		return 0, fmt.Errorf("invalid type assertion: %T", v)
+	}
+}
+
+func (s *DriverService) GetFinancialSummaryService(ctx context.Context) (domain.FinancialSummary, error) {
+	summary, err := s.queries.GetFinancialSummary(ctx)
+	if err != nil {
+		return domain.FinancialSummary{}, err
+	}
+	s.logger.Info("Financial summary result", "summary", summary)
+
+	totalRevenue, err := toFloat64(summary.TotalRevenue)
+	if err != nil {
+		return domain.FinancialSummary{}, err
+	}
+
+	maintenanceCost, err := toFloat64(summary.MaintenanceCost)
+	if err != nil {
+		return domain.FinancialSummary{}, err
+	}
+
+	driverPayroll, err := toFloat64(summary.DriverPayroll)
+	if err != nil {
+		return domain.FinancialSummary{}, err
+	}
+
+	tripOverheads, err := toFloat64(summary.TripOverheads)
+	if err != nil {
+		return domain.FinancialSummary{}, err
+	}
+
+	totalExpenses := maintenanceCost + driverPayroll + tripOverheads
+	netProfit := totalRevenue - totalExpenses
+	profitMargin := 0.0
+	if totalRevenue > 0 {
+		profitMargin = (netProfit / totalRevenue) * 100
+	}
+
+	return domain.FinancialSummary{
+		Revenue: totalRevenue,
+		Expenses: domain.ExpenseSummary{
+			Maintenance:   maintenanceCost,
+			DriverPayroll: driverPayroll,
+			TripOverheads: tripOverheads,
+		},
+		NetProfit:    netProfit,
+		ProfitMargin: profitMargin,
+	}, nil
+}
+
+func (s *DriverService) GetTripProfitabilityService(ctx context.Context, tripID int32) (domain.TripProfitability, error) {
+	profitability, err := s.queries.GetTripProfitability(ctx, tripID)
+	if err != nil {
+		return domain.TripProfitability{}, err
+	}
+
+	totalExpenses, err := toFloat64(profitability.TotalExpenses)
+	if err != nil {
+		return domain.TripProfitability{}, err
+	}
+
+	totalRevenue, err := toFloat64(profitability.TotalRevenue)
+	if err != nil {
+		return domain.TripProfitability{}, err
+	}
+	netProfit := totalRevenue - totalExpenses
+
+	return domain.TripProfitability{
+		TripID:        tripID,
+		TotalRevenue:  totalRevenue,
+		TotalExpenses: totalExpenses,
+		NetProfit:     netProfit,
+	}, nil
+}
+
+func (s *DriverService) RegisterDriverPaymentService(ctx context.Context, payment domain.DriverPayment, userID string) (dm_svc_db.DriverLedger, error) {
+	driverID := int32(payment.DriverID)
+	txRecord, err := s.queries.DriverLedger(ctx, dm_svc_db.DriverLedgerParams{
+		DriverID:      driverID,
+		EntryType:     "sometype",
+		RelatedTripID: nil,
+		Amount:        payment.Amount,
+		Notes:         &payment.Notes,
+	})
+	if err != nil {
+		return dm_svc_db.DriverLedger{}, err
+	}
+	return txRecord, nil
+}
+
+func (s *DriverService) RegisterTripOverheadService(ctx context.Context, overhead domain.TripOverhead, userID string) (dm_svc_db.Transaction, error) {
+	userUUID, _ := uuid.Parse(userID)
+	tripID := int32(overhead.TripID)
+	txRecord, err := s.queries.CreateTransaction(ctx, dm_svc_db.CreateTransactionParams{
+		TripID:        &tripID,
+		Amount:        overhead.Amount,
+		Category:      dm_svc_db.TransactionCategory("EXPENSE_TRIP"),
+		PaymentMethod: overhead.Method,
+		HandledBy: pgtype.UUID{
+			Bytes: userUUID,
+			Valid: true,
+		},
+		HandlerName: &overhead.ReceiverName,
+		Notes:       &overhead.Notes,
+	})
+	if err != nil {
+		return dm_svc_db.Transaction{}, err
+	}
+	return txRecord, nil
 }
