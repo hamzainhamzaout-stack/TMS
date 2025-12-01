@@ -86,6 +86,11 @@ func (s *DriverService) DeleteDriver(ctx context.Context, driverID int32) error 
 	return s.queries.DeleteDriver(ctx, driverID)
 }
 
+func (s *DriverService) GetDriverLedger(ctx context.Context, driverID int32) ([]dm_svc_db.DriverLedger, error) {
+	s.logger.Info("Getting driver ledger", "driverID", driverID)
+	return s.queries.GetDriverLedger(ctx, driverID)
+}
+
 func (s *DriverService) AddPayrollService(ctx context.Context, driverID int32, req *domain.DriverLedger) error {
 	s.logger.Info("Adding payroll", "driverID", driverID)
 	_, err := s.queries.DriverLedger(ctx, dm_svc_db.DriverLedgerParams{
@@ -341,18 +346,12 @@ func (s *DriverService) RegisterFinalPaymentService(ctx context.Context, transac
 		return dm_svc_db.Transaction{}, err
 	}
 
-	trip, err := s.queries.GetTripTransactionDetail(ctx, &tripID)
-	if err != nil {
-		return dm_svc_db.Transaction{}, err
-	}
-
-	currentPaidAmount := decimal.NewFromFloat(trip.Amount)
-	newPaidAmount := currentPaidAmount.Add(decimal.NewFromFloat(transaction.Amount))
+	paidAmountDecimal := decimal.NewFromFloat(transaction.Amount)
 
 	err = s.queries.UpdateTripPaymentState(ctx, dm_svc_db.UpdateTripPaymentStateParams{
 		ID: tripID,
 		PaidAmount: decimal.NullDecimal{
-			Decimal: newPaidAmount,
+			Decimal: paidAmountDecimal,
 			Valid:   true,
 		},
 	})
@@ -382,6 +381,11 @@ func (s *DriverService) RegisterMaintenanceService(ctx context.Context, maintena
 	})
 	if err != nil {
 		return dm_svc_db.MaintenanceLog{}, fmt.Errorf("failed to create maintenance record: %v", err)
+	}
+
+	_, err = s.UpdateCarStatus(ctx, maintenance.CarID, domain.Maintenance)
+	if err != nil {
+		return dm_svc_db.MaintenanceLog{}, fmt.Errorf("failed to update car status: %v", err)
 	}
 
 	txRecord, err := s.queries.CreateTransaction(ctx, dm_svc_db.CreateTransactionParams{

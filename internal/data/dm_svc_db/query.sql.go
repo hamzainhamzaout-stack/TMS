@@ -536,6 +536,40 @@ func (q *Queries) GetDriverByID(ctx context.Context, id int32) (Driver, error) {
 	return i, err
 }
 
+const getDriverLedger = `-- name: GetDriverLedger :many
+SELECT id, driver_id, entry_type, amount, related_trip_id, notes, created_at
+FROM driver_ledger
+WHERE driver_id = $1
+`
+
+func (q *Queries) GetDriverLedger(ctx context.Context, driverID int32) ([]DriverLedger, error) {
+	rows, err := q.db.Query(ctx, getDriverLedger, driverID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DriverLedger
+	for rows.Next() {
+		var i DriverLedger
+		if err := rows.Scan(
+			&i.ID,
+			&i.DriverID,
+			&i.EntryType,
+			&i.Amount,
+			&i.RelatedTripID,
+			&i.Notes,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getExpenseTypes = `-- name: GetExpenseTypes :many
 SELECT id, name
 FROM expenses
@@ -658,21 +692,22 @@ func (q *Queries) GetRoles(ctx context.Context) ([]Role, error) {
 }
 
 const getTripDetail = `-- name: GetTripDetail :one
-SELECT t.id, t.driver_id, t.total_cost, t.approved_by, t.created_at, t.updated_at, d.first_name AS driver_first_name, d.last_name AS driver_last_name
+SELECT t.id, t.driver_id, t.total_cost, t.approved_by, t.created_at, t.updated_at, t.paid_amount, d.first_name AS driver_first_name, d.last_name AS driver_last_name
 FROM trip t
 JOIN driver d ON t.driver_id = d.id
 WHERE t.id = $1
 `
 
 type GetTripDetailRow struct {
-	ID              int32            `json:"id"`
-	DriverID        int32            `json:"driver_id"`
-	TotalCost       float64          `json:"total_cost"`
-	ApprovedBy      uuid.UUID        `json:"approved_by"`
-	CreatedAt       pgtype.Timestamp `json:"created_at"`
-	UpdatedAt       pgtype.Timestamp `json:"updated_at"`
-	DriverFirstName string           `json:"driver_first_name"`
-	DriverLastName  string           `json:"driver_last_name"`
+	ID              int32               `json:"id"`
+	DriverID        int32               `json:"driver_id"`
+	TotalCost       float64             `json:"total_cost"`
+	ApprovedBy      uuid.UUID           `json:"approved_by"`
+	CreatedAt       pgtype.Timestamp    `json:"created_at"`
+	UpdatedAt       pgtype.Timestamp    `json:"updated_at"`
+	PaidAmount      decimal.NullDecimal `json:"paid_amount"`
+	DriverFirstName string              `json:"driver_first_name"`
+	DriverLastName  string              `json:"driver_last_name"`
 }
 
 func (q *Queries) GetTripDetail(ctx context.Context, id int32) (GetTripDetailRow, error) {
@@ -685,6 +720,7 @@ func (q *Queries) GetTripDetail(ctx context.Context, id int32) (GetTripDetailRow
 		&i.ApprovedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PaidAmount,
 		&i.DriverFirstName,
 		&i.DriverLastName,
 	)

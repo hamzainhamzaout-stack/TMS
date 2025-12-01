@@ -100,6 +100,24 @@ func (h *DriverHandler) DeleteDriver(w http.ResponseWriter, r *http.Request) {
 	responses.SuccessJSONResponse("deleted successfully", nil, http.StatusOK, w)
 }
 
+func (h *DriverHandler) GetDriverLedger(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Getting driver ledger")
+	driverID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	ledger, err := h.service.GetDriverLedger(r.Context(), int32(driverID))
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+	data := map[string]interface{}{
+		"ledger": ledger,
+	}
+	responses.SuccessJSONResponse("ledger retrieved successfully", data, http.StatusOK, w)
+}
+
 func (h *DriverHandler) AddPayroll(w http.ResponseWriter, r *http.Request) {
 	driverID, err := strconv.Atoi(chi.URLParam(r, "id"))
 	if err != nil {
@@ -543,7 +561,7 @@ func (h *DriverHandler) RegisterAdvancePayment(w http.ResponseWriter, r *http.Re
 func (h *DriverHandler) RegisterFinalPayment(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("Registering final payments")
 
-	userID, ok := r.Context().Value("user_id").(string)
+	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
 		responses.ErrorJSONResponse(fmt.Errorf("unauthorized action"), http.StatusUnauthorized, w, nil)
 		return

@@ -217,7 +217,7 @@ DELETE FROM expenses
 WHERE id = $1;
 
 -- name: GetTripDetail :one
-SELECT t.id, t.driver_id, t.total_cost, t.approved_by, t.created_at, t.updated_at, d.first_name AS driver_first_name, d.last_name AS driver_last_name
+SELECT t.id, t.driver_id, t.total_cost, t.approved_by, t.created_at, t.updated_at, t.paid_amount, d.first_name AS driver_first_name, d.last_name AS driver_last_name
 FROM trip t
 JOIN driver d ON t.driver_id = d.id
 WHERE t.id = $1;
@@ -310,3 +310,8 @@ WHERE trip_id = $1;
 INSERT INTO driver_ledger (driver_id, entry_type, amount, related_trip_id, notes)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
+
+-- name: GetDriverLedger :many
+SELECT *
+FROM driver_ledger
+WHERE driver_id = $1;
