@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Robotech-Org/driver-management/internal/auth"
@@ -286,6 +287,18 @@ func NewNullDecimalFromFloat(f float64) decimal.NullDecimal {
 		Valid:   true,
 	}
 }
+
+type MyTime time.Time
+
+func (t *MyTime) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), `"`)
+	parsed, err := time.Parse("2006-01-02T15:04", s)
+	if err != nil {
+		return err
+	}
+	*t = MyTime(parsed)
+	return nil
+}
 func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -293,14 +306,14 @@ func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		DriverID      int32     `json:"driver_id"`
-		TotalCost     float64   `json:"total_cost"`
-		Origin        string    `json:"origin"`
-		Destination   string    `json:"destination"`
-		DepartureTime time.Time `json:"departure_time"`
-		ArrivalTime   time.Time `json:"arrival_time"`
-		Items         string    `json:"items"`
-		TotalQuote    float64   `json:"total_quote"`
+		DriverID      int32   `json:"driver_id"`
+		TotalCost     float64 `json:"total_cost"`
+		Origin        string  `json:"origin"`
+		Destination   string  `json:"destination"`
+		DepartureTime MyTime  `json:"departure_time"`
+		ArrivalTime   MyTime  `json:"arrival_time"`
+		Items         string  `json:"items"`
+		TotalQuote    float64 `json:"total_quote"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
