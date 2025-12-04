@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/Robotech-Org/driver-management/internal/auth"
 	"github.com/Robotech-Org/driver-management/internal/data/dm_svc_db"
@@ -16,6 +17,8 @@ import (
 	"github.com/cloudinary/cloudinary-go/v2/api/uploader"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/greatcloak/decimal"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type DriverHandler struct {
@@ -84,6 +87,22 @@ func (h *DriverHandler) UpdateDriver(w http.ResponseWriter, r *http.Request) {
 
 	data := map[string]string{"driver": updated.FirstName}
 	responses.SuccessJSONResponse("updated successfully", data, http.StatusOK, w)
+}
+
+func (h *DriverHandler) GetDriverDetail(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	driver, err := h.service.GetDriverDetail(r.Context(), int32(id))
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	responses.SuccessJSONResponse("driver detail", driver, http.StatusOK, w)
 }
 
 func (h *DriverHandler) DeleteDriver(w http.ResponseWriter, r *http.Request) {
@@ -261,6 +280,12 @@ func (h *DriverHandler) ListTrips(w http.ResponseWriter, r *http.Request) {
 	responses.SuccessJSONResponse("list successfully", trips, http.StatusOK, w)
 }
 
+func NewNullDecimalFromFloat(f float64) decimal.NullDecimal {
+	return decimal.NullDecimal{
+		Decimal: decimal.NewFromFloat(f),
+		Valid:   true,
+	}
+}
 func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -268,8 +293,14 @@ func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		DriverID  int32   `json:"driver_id"`
-		TotalCost float64 `json:"total_cost"`
+		DriverID      int32     `json:"driver_id"`
+		TotalCost     float64   `json:"total_cost"`
+		Origin        string    `json:"origin"`
+		Destination   string    `json:"destination"`
+		DepartureTime time.Time `json:"departure_time"`
+		ArrivalTime   time.Time `json:"arrival_time"`
+		Items         string    `json:"items"`
+		TotalQuote    float64   `json:"total_quote"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
@@ -280,10 +311,23 @@ func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 		responses.ErrorJSONResponse(errors.New("invalid user ID in token"), http.StatusInternalServerError, w, nil)
 		return
 	}
-	tripData := domain.CreateTripParams{
-		DriverID:   req.DriverID,
-		TotalCost:  req.TotalCost,
-		ApprovedBy: approvedBy,
+
+	tripData := dm_svc_db.CreateTripParams{
+		DriverID:    req.DriverID,
+		TotalCost:   req.TotalCost,
+		ApprovedBy:  approvedBy,
+		Origin:      &req.Origin,
+		Destination: &req.Destination,
+		DepartureTime: pgtype.Timestamp{
+			Time:  req.DepartureTime,
+			Valid: true,
+		},
+		ArrivalTime: pgtype.Timestamp{
+			Time:  req.ArrivalTime,
+			Valid: true,
+		},
+		Items:      &req.Items,
+		TotalQuote: NewNullDecimalFromFloat(req.TotalCost),
 	}
 	if err := h.service.CreateTrip(r.Context(), tripData); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)

@@ -81,6 +81,11 @@ func (s *DriverService) ListDrivers(ctx context.Context) ([]dm_svc_db.Driver, er
 	return s.queries.ListDrivers(ctx)
 }
 
+func (s *DriverService) GetDriverDetail(ctx context.Context, driverID int32) (dm_svc_db.GetDriverDetailRow, error) {
+	s.logger.Info("Getting driver detail", "driverID", driverID)
+	return s.queries.GetDriverDetail(ctx, driverID)
+}
+
 func (s *DriverService) DeleteDriver(ctx context.Context, driverID int32) error {
 	s.logger.Info("Deleting driver", "driverID", driverID)
 	return s.queries.DeleteDriver(ctx, driverID)
@@ -165,12 +170,17 @@ func (s *DriverService) ChangeCarDriver(ctx context.Context, driverID int32, car
 	})
 }
 
-func (s *DriverService) CreateTrip(ctx context.Context, trip domain.CreateTripParams) error {
+func (s *DriverService) CreateTrip(ctx context.Context, trip dm_svc_db.CreateTripParams) error {
 	s.logger.Info("Creating trip", "trip", trip)
 	tripReturning, err := s.queries.CreateTrip(ctx, dm_svc_db.CreateTripParams{
-		DriverID:   trip.DriverID,
-		TotalCost:  trip.TotalCost,
-		ApprovedBy: trip.ApprovedBy,
+		DriverID:      trip.DriverID,
+		TotalCost:     trip.TotalCost,
+		ApprovedBy:    trip.ApprovedBy,
+		Origin:        trip.Origin,
+		Destination:   trip.Destination,
+		DepartureTime: trip.DepartureTime,
+		ArrivalTime:   trip.ArrivalTime,
+		Items:         trip.Items,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create trip: %w", err)
