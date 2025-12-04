@@ -139,6 +139,29 @@ SET current_driver_id = $2, license_plate = $3, make = $4, model = $5, year = $6
 WHERE id = $1
 RETURNING *;
 
+-- name: UpdateCarPartial :one
+UPDATE cars
+SET
+    current_driver_id = COALESCE(sqlc.narg('current_driver_id'), current_driver_id),
+    license_plate     = COALESCE(sqlc.narg('license_plate'), license_plate),
+    make              = COALESCE(sqlc.narg('make'), make),
+    model             = COALESCE(sqlc.narg('model'), model),
+    year              = COALESCE(sqlc.narg('year'), year),
+    color             = COALESCE(sqlc.narg('color'), color),
+    vin               = COALESCE(sqlc.narg('vin'), vin),
+    fuel_type         = COALESCE(sqlc.narg('fuel_type'), fuel_type),
+    transmission      = COALESCE(sqlc.narg('transmission'), transmission),
+    mileage           = COALESCE(sqlc.narg('mileage'), mileage),
+    status            = COALESCE(sqlc.narg('status'), status),
+    updated_at        = NOW()
+WHERE id = sqlc.arg('id')
+RETURNING *;
+
+-- name: GetCarByID :one
+SELECT *
+FROM cars
+WHERE id = $1;
+
 -- name: UpdateCarStatus :one
 UPDATE cars
 SET status = $1

@@ -502,6 +502,34 @@ func (q *Queries) DriverLedger(ctx context.Context, arg DriverLedgerParams) (Dri
 	return i, err
 }
 
+const getCarByID = `-- name: GetCarByID :one
+SELECT id, current_driver_id, license_plate, make, model, year, color, vin, fuel_type, transmission, mileage, status, created_at, updated_at
+FROM cars
+WHERE id = $1
+`
+
+func (q *Queries) GetCarByID(ctx context.Context, id int32) (Car, error) {
+	row := q.db.QueryRow(ctx, getCarByID, id)
+	var i Car
+	err := row.Scan(
+		&i.ID,
+		&i.CurrentDriverID,
+		&i.LicensePlate,
+		&i.Make,
+		&i.Model,
+		&i.Year,
+		&i.Color,
+		&i.Vin,
+		&i.FuelType,
+		&i.Transmission,
+		&i.Mileage,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getDashboardCounts = `-- name: GetDashboardCounts :one
 SELECT
     COALESCE((SELECT COUNT(*) FROM driver), 0) AS driver_count,
@@ -1184,6 +1212,75 @@ func (q *Queries) UpdateCar(ctx context.Context, arg UpdateCarParams) (Car, erro
 		arg.Transmission,
 		arg.Mileage,
 		arg.Status,
+	)
+	var i Car
+	err := row.Scan(
+		&i.ID,
+		&i.CurrentDriverID,
+		&i.LicensePlate,
+		&i.Make,
+		&i.Model,
+		&i.Year,
+		&i.Color,
+		&i.Vin,
+		&i.FuelType,
+		&i.Transmission,
+		&i.Mileage,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateCarPartial = `-- name: UpdateCarPartial :one
+UPDATE cars
+SET
+    current_driver_id = COALESCE($1, current_driver_id),
+    license_plate     = COALESCE($2, license_plate),
+    make              = COALESCE($3, make),
+    model             = COALESCE($4, model),
+    year              = COALESCE($5, year),
+    color             = COALESCE($6, color),
+    vin               = COALESCE($7, vin),
+    fuel_type         = COALESCE($8, fuel_type),
+    transmission      = COALESCE($9, transmission),
+    mileage           = COALESCE($10, mileage),
+    status            = COALESCE($11, status),
+    updated_at        = NOW()
+WHERE id = $12
+RETURNING id, current_driver_id, license_plate, make, model, year, color, vin, fuel_type, transmission, mileage, status, created_at, updated_at
+`
+
+type UpdateCarPartialParams struct {
+	CurrentDriverID *int32              `json:"current_driver_id"`
+	LicensePlate    *string             `json:"license_plate"`
+	Make            *string             `json:"make"`
+	Model           *string             `json:"model"`
+	Year            *int32              `json:"year"`
+	Color           *string             `json:"color"`
+	Vin             *string             `json:"vin"`
+	FuelType        *string             `json:"fuel_type"`
+	Transmission    *string             `json:"transmission"`
+	Mileage         decimal.NullDecimal `json:"mileage"`
+	Status          *string             `json:"status"`
+	ID              int32               `json:"id"`
+}
+
+func (q *Queries) UpdateCarPartial(ctx context.Context, arg UpdateCarPartialParams) (Car, error) {
+	row := q.db.QueryRow(ctx, updateCarPartial,
+		arg.CurrentDriverID,
+		arg.LicensePlate,
+		arg.Make,
+		arg.Model,
+		arg.Year,
+		arg.Color,
+		arg.Vin,
+		arg.FuelType,
+		arg.Transmission,
+		arg.Mileage,
+		arg.Status,
+		arg.ID,
 	)
 	var i Car
 	err := row.Scan(
