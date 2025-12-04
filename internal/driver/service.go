@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -127,25 +128,119 @@ func (s *DriverService) ListCars(ctx context.Context) ([]dm_svc_db.Car, error) {
 
 func (s *DriverService) CreateCar(ctx context.Context, car *dm_svc_db.Car) (dm_svc_db.Car, error) {
 	s.logger.Info("Creating car", "car", car)
-	return s.queries.CreateCar(ctx, dm_svc_db.CreateCarParams{
-		Make:         car.Make,
-		Model:        car.Model,
-		Year:         car.Year,
-		Color:        car.Color,
-		LicensePlate: car.LicensePlate,
-	})
+	available := "available"
+	inUse := "in_use"
+	switch car.CurrentDriverID {
+	case nil:
+		return s.queries.CreateCar(ctx, dm_svc_db.CreateCarParams{
+			Make:         car.Make,
+			Model:        car.Model,
+			Year:         car.Year,
+			Color:        car.Color,
+			LicensePlate: car.LicensePlate,
+			Vin:          car.Vin,
+			FuelType:     car.FuelType,
+			Transmission: car.Transmission,
+			Mileage:      car.Mileage,
+			Status:       &available,
+		})
+	default:
+		return s.queries.CreateCar(ctx, dm_svc_db.CreateCarParams{
+			CurrentDriverID: car.CurrentDriverID,
+			Make:            car.Make,
+			Model:           car.Model,
+			Year:            car.Year,
+			Color:           car.Color,
+			LicensePlate:    car.LicensePlate,
+			Vin:             car.Vin,
+			FuelType:        car.FuelType,
+			Transmission:    car.Transmission,
+			Mileage:         car.Mileage,
+			Status:          &inUse,
+		})
+	}
 }
 
+//	func (s *DriverService) UpdateCar(ctx context.Context, car *dm_svc_db.Car) (dm_svc_db.Car, error) {
+//		s.logger.Info("Updating car", "car", car)
+//		carOld, err := s.queries.GetCarByID(ctx, car.ID)
+//		if err != nil {
+//			return dm_svc_db.Car{}, err
+//		}
+//		if carOld.CurrentDriverID != car.CurrentDriverID{
+//		}
+//		car.LicensePlate = car.LicensePlate
+//		car.Make = car.Make
+//		car.Model = car.Model
+//		car.Year = car.Year
+//		car.Color = car.Color
+//		car.Vin = car.Vin
+//		car.FuelType = car.FuelType
+//		car.Transmission = car.Transmission
+//		car.Mileage = car.Mileage
+//		car.Status = car.Status
+//		return s.queries.UpdateCar(ctx, dm_svc_db.UpdateCarParams{
+//			ID:           car.ID,
+//			Make:         car.Make,
+//			Model:        car.Model,
+//			Year:         car.Year,
+//			Color:        car.Color,
+//			LicensePlate: car.LicensePlate,
+//			Vin:          car.Vin,
+//			FuelType:     car.FuelType,
+//			Transmission: car.Transmission,
+//			Mileage:      car.Mileage,
+//			Status:       car.Status,
+//		})
+//	}
 func (s *DriverService) UpdateCar(ctx context.Context, car *dm_svc_db.Car) (dm_svc_db.Car, error) {
-	s.logger.Info("Updating car", "car", car)
-	return s.queries.UpdateCar(ctx, dm_svc_db.UpdateCarParams{
-		ID:           car.ID,
-		Make:         car.Make,
-		Model:        car.Model,
-		Year:         car.Year,
-		Color:        car.Color,
-		LicensePlate: car.LicensePlate,
+	s.logger.Info("Updating car", "car_id", car.ID)
+
+	// Fetch current car for comparison (especially driver changes)
+	oldCar, err := s.queries.GetCarByID(ctx, car.ID)
+	if err != nil {
+		return dm_svc_db.Car{}, fmt.Errorf("car not found: %w", err)
+	}
+
+	// Detect driver change (oldCar.CurrentDriverID is sql.NullInt32)
+	if oldCar.CurrentDriverID != nil {
+		if car.CurrentDriverID == nil {
+			s.logger.Info("Car driver removed", "car_id", car.ID, "old_driver", oldCar.CurrentDriverID)
+		} else if oldCar.CurrentDriverID != car.CurrentDriverID {
+			s.logger.Info("Car reassigned",
+				"car_id", car.ID,
+				"from_driver", oldCar.CurrentDriverID,
+				"to_driver", *car.CurrentDriverID,
+			)
+		}
+	} else if car.CurrentDriverID != nil {
+		s.logger.Info("Car assigned to driver", "car_id", car.ID, "new_driver", *car.CurrentDriverID)
+	}
+
+	// Perform partial update — only non-nil fields from input will be updated
+	updatedCar, err := s.queries.UpdateCarPartial(ctx, dm_svc_db.UpdateCarPartialParams{
+		ID:              car.ID,
+		CurrentDriverID: car.CurrentDriverID, // *int32 → *int32
+		LicensePlate:    &car.LicensePlate,   // *string → *string
+		Make:            &car.Make,
+		Model:           &car.Model,
+		Year:            car.Year,
+		Color:           car.Color,
+		Vin:             car.Vin,
+		FuelType:        car.FuelType,
+		Transmission:    car.Transmission,
+		Mileage:         car.Mileage,
+		Status:          car.Status,
 	})
+	if err != nil {
+		return dm_svc_db.Car{}, fmt.Errorf("failed to update car: %w", err)
+	}
+
+	return updatedCar, nil
+}
+
+func nullString(s string) sql.NullString {
+	return sql.NullString{String: s, Valid: s != ""}
 }
 
 func (s *DriverService) UpdateCarStatus(ctx context.Context, carID int32, carStatus domain.CarStatus) (dm_svc_db.Car, error) {
