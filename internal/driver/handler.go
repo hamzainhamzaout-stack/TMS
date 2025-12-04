@@ -332,11 +332,11 @@ func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 		Origin:      &req.Origin,
 		Destination: &req.Destination,
 		DepartureTime: pgtype.Timestamp{
-			Time:  req.DepartureTime,
+			Time:  time.Time(req.DepartureTime),
 			Valid: true,
 		},
 		ArrivalTime: pgtype.Timestamp{
-			Time:  req.ArrivalTime,
+			Time:  time.Time(req.ArrivalTime),
 			Valid: true,
 		},
 		Items:      &req.Items,
