@@ -497,6 +497,11 @@ type Trip struct {
 	PaidAmount    decimal.NullDecimal `json:"paid_amount"`
 	PaymentStatus NullPaymentStatus   `json:"payment_status"`
 	Status        NullTripStatus      `json:"status"`
+	Origin        *string             `json:"origin"`
+	Destination   *string             `json:"destination"`
+	DepartureTime pgtype.Timestamp    `json:"departure_time"`
+	ArrivalTime   pgtype.Timestamp    `json:"arrival_time"`
+	Items         *string             `json:"items"`
 }
 
 type TripExpense struct {

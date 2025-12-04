@@ -157,8 +157,8 @@ WHERE id = $2
 RETURNING *;
 
 -- name: CreateTrip :one
-INSERT INTO trip(driver_id, total_cost, approved_by)
-VALUES($1, $2, $3)
+INSERT INTO trip(driver_id, total_cost, approved_by, origin, destination, departure_time, arrival_time, items, total_quote)
+VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
 -- name: AddExpensesToTrip :exec
@@ -217,7 +217,39 @@ DELETE FROM expenses
 WHERE id = $1;
 
 -- name: GetTripDetail :one
-SELECT t.id, t.driver_id, t.total_cost, t.approved_by, t.created_at, t.updated_at, t.paid_amount, d.first_name AS driver_first_name, d.last_name AS driver_last_name
+SELECT
+  t.*,
+  d.first_name AS driver_first_name,
+  d.last_name AS driver_last_name,
+  COALESCE(
+    (SELECT json_agg(
+      json_build_object(
+        'expense_name', e.name,
+        'cost', te.cost,
+        'receipt_url', te.receipt_url,
+        'remark', te.remark
+      )
+    )
+    FROM trip_expenses te
+    JOIN expenses e ON te.expenses_id = e.id
+    WHERE te.trip_id = t.id),
+    '[]'::json
+  ) AS expenses,
+  COALESCE(
+    (SELECT json_agg(
+      json_build_object(
+        'id', tr.id,
+        'amount', tr.amount,
+        'category', tr.category,
+        'payment_method', tr.payment_method,
+        'notes', tr.notes,
+        'created_at', tr.created_at
+      )
+    )
+    FROM transactions tr
+    WHERE tr.trip_id = t.id AND tr.category IN ('INCOME_DEPOSIT', 'INCOME_FINAL')),
+    '[]'::json
+  ) AS incomes
 FROM trip t
 JOIN driver d ON t.driver_id = d.id
 WHERE t.id = $1;
@@ -315,3 +347,18 @@ RETURNING *;
 SELECT *
 FROM driver_ledger
 WHERE driver_id = $1;
+
+-- name: GetDriverDetail :one
+SELECT
+    d.*,
+    c.license_plate,
+    COALESCE(
+        JSON_AGG(dl ORDER BY dl.created_at)
+        FILTER (WHERE dl.id IS NOT NULL),
+        '[]'
+    ) AS ledger_entries
+FROM driver d
+LEFT JOIN cars c ON d.id = c.current_driver_id
+LEFT JOIN driver_ledger dl ON d.id = dl.driver_id
+WHERE d.id = $1
+GROUP BY d.id, c.license_plate;
