@@ -709,6 +709,7 @@ func (h *DriverHandler) RegisterDriverPayment(w http.ResponseWriter, r *http.Req
 
 func (h *DriverHandler) RegisterTripOverhead(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("Registering trip overhead")
+	h.logger.Debug("Registering trip overhead")
 
 	userID, ok := r.Context().Value("user_id").(string)
 	if !ok {
