@@ -76,3 +76,8 @@ type TripOverhead struct {
 	ReceiverName string  `json:"receiver_name"`
 	Notes        string  `json:"notes"`
 }
+
+type ReturnPayment struct {
+	TripID int     `json:"trip_id"`
+	Amount float64 `json:"amount"`
+}

@@ -276,6 +276,8 @@ func (s *DriverService) CreateTrip(ctx context.Context, trip dm_svc_db.CreateTri
 		DepartureTime: trip.DepartureTime,
 		ArrivalTime:   trip.ArrivalTime,
 		Items:         trip.Items,
+		ItemWeight:    trip.ItemWeight,
+		CoDriverName:  trip.CoDriverName,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create trip: %w", err)
@@ -575,15 +577,9 @@ func (s *DriverService) GetTripProfitabilityService(ctx context.Context, tripID 
 		return domain.TripProfitability{}, err
 	}
 
-	totalExpenses, err := toFloat64(profitability.TotalExpenses)
-	if err != nil {
-		return domain.TripProfitability{}, err
-	}
+	totalExpenses := profitability.TotalExpenses
+	totalRevenue := profitability.TotalRevenue
 
-	totalRevenue, err := toFloat64(profitability.TotalRevenue)
-	if err != nil {
-		return domain.TripProfitability{}, err
-	}
 	netProfit := totalRevenue - totalExpenses
 
 	return domain.TripProfitability{
@@ -598,7 +594,7 @@ func (s *DriverService) RegisterDriverPaymentService(ctx context.Context, paymen
 	driverID := int32(payment.DriverID)
 	txRecord, err := s.queries.DriverLedger(ctx, dm_svc_db.DriverLedgerParams{
 		DriverID:      driverID,
-		EntryType:     "sometype",
+		EntryType:     string(dm_svc_db.TransactionCategoryEXPENSEDRIVERPAYROLL),
 		RelatedTripID: nil,
 		Amount:        payment.Amount,
 		Notes:         &payment.Notes,
@@ -628,4 +624,21 @@ func (s *DriverService) RegisterTripOverheadService(ctx context.Context, overhea
 		return dm_svc_db.Transaction{}, err
 	}
 	return txRecord, nil
+}
+
+func (s *DriverService) RegisterReturnPaymentService(ctx context.Context, req domain.ReturnPayment, userID string) (dm_svc_db.Trip, error) {
+	s.logger.Info("Registering return payment", "tripID", req.TripID)
+
+	amt := decimal.NewFromFloat(req.Amount)
+	trip, err := s.queries.RegisterReturnPayment(ctx, dm_svc_db.RegisterReturnPaymentParams{
+		ID: int32(req.TripID),
+		ReturnedAmount: decimal.NullDecimal{
+			Decimal: amt,
+			Valid:   true,
+		},
+	})
+	if err != nil {
+		return dm_svc_db.Trip{}, err
+	}
+	return trip, nil
 }
