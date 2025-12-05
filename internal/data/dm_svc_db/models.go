@@ -484,24 +484,27 @@ type Transaction struct {
 }
 
 type Trip struct {
-	ID            int32               `json:"id"`
-	DriverID      int32               `json:"driver_id"`
-	TotalCost     float64             `json:"total_cost"`
-	ReceiptUrl    *string             `json:"receipt_url"`
-	ApprovedBy    uuid.UUID           `json:"approved_by"`
-	Isactive      bool                `json:"isactive"`
-	CreatedAt     pgtype.Timestamp    `json:"created_at"`
-	UpdatedAt     pgtype.Timestamp    `json:"updated_at"`
-	ClientName    *string             `json:"client_name"`
-	TotalQuote    decimal.NullDecimal `json:"total_quote"`
-	PaidAmount    decimal.NullDecimal `json:"paid_amount"`
-	PaymentStatus NullPaymentStatus   `json:"payment_status"`
-	Status        NullTripStatus      `json:"status"`
-	Origin        *string             `json:"origin"`
-	Destination   *string             `json:"destination"`
-	DepartureTime pgtype.Timestamp    `json:"departure_time"`
-	ArrivalTime   pgtype.Timestamp    `json:"arrival_time"`
-	Items         *string             `json:"items"`
+	ID             int32               `json:"id"`
+	DriverID       int32               `json:"driver_id"`
+	TotalCost      float64             `json:"total_cost"`
+	ReceiptUrl     *string             `json:"receipt_url"`
+	ApprovedBy     uuid.UUID           `json:"approved_by"`
+	Isactive       bool                `json:"isactive"`
+	CreatedAt      pgtype.Timestamp    `json:"created_at"`
+	UpdatedAt      pgtype.Timestamp    `json:"updated_at"`
+	ClientName     *string             `json:"client_name"`
+	TotalQuote     decimal.NullDecimal `json:"total_quote"`
+	PaidAmount     decimal.NullDecimal `json:"paid_amount"`
+	PaymentStatus  NullPaymentStatus   `json:"payment_status"`
+	Status         NullTripStatus      `json:"status"`
+	Origin         *string             `json:"origin"`
+	Destination    *string             `json:"destination"`
+	DepartureTime  pgtype.Timestamp    `json:"departure_time"`
+	ArrivalTime    pgtype.Timestamp    `json:"arrival_time"`
+	Items          *string             `json:"items"`
+	ReturnedAmount decimal.NullDecimal `json:"returned_amount"`
+	ItemWeight     decimal.NullDecimal `json:"item_weight"`
+	CoDriverName   *string             `json:"co_driver_name"`
 }
 
 type TripExpense struct {

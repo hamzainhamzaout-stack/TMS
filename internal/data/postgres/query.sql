@@ -180,8 +180,8 @@ WHERE id = $2
 RETURNING *;
 
 -- name: CreateTrip :one
-INSERT INTO trip(driver_id, total_cost, approved_by, origin, destination, departure_time, arrival_time, items, total_quote)
-VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO trip(driver_id, total_cost, approved_by, origin, destination, departure_time, arrival_time, items, total_quote, item_weight, co_driver_name)
+VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: AddExpensesToTrip :exec
@@ -344,8 +344,16 @@ FROM
 -- name: GetTripProfitability :one
 SELECT
     t.id AS trip_id,
-    COALESCE(SUM(CASE WHEN tx.category = 'INCOME_DEPOSIT' OR tx.category = 'INCOME_FINAL' THEN tx.amount ELSE 0 END), 0) AS total_revenue,
-    COALESCE(SUM(CASE WHEN tx.category = 'EXPENSE_TRIP' OR tx.category = 'EXPENSE_OVERHEAD' THEN tx.amount ELSE 0 END), 0) AS total_expenses
+    COALESCE(
+        SUM(CASE WHEN tx.category IN ('INCOME_DEPOSIT', 'INCOME_FINAL') THEN tx.amount ELSE 0 END),
+        0
+    )::float8 AS total_revenue,
+
+    (
+        COALESCE(SUM(CASE WHEN tx.category IN ('EXPENSE_TRIP', 'EXPENSE_OVERHEAD') THEN tx.amount ELSE 0 END), 0)
+        - t.returned_amount
+    )::float8 AS total_expenses
+
 FROM
     trip t
 LEFT JOIN
@@ -385,3 +393,11 @@ LEFT JOIN cars c ON d.id = c.current_driver_id
 LEFT JOIN driver_ledger dl ON d.id = dl.driver_id
 WHERE d.id = $1
 GROUP BY d.id, c.license_plate;
+
+-- name: RegisterReturnPayment :one
+UPDATE trip
+SET
+    returned_amount = returned_amount + $2,
+    total_cost = total_cost - $2
+WHERE id = $1
+RETURNING *;

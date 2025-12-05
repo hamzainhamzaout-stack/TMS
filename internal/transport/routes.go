@@ -113,6 +113,7 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 		})
 		financeRoute.Post("/driver-pay", di.DriverHandler.RegisterDriverPayment)
 		financeRoute.Post("/trip-overhead", di.DriverHandler.RegisterTripOverhead)
+		financeRoute.Post("/trip-return", di.DriverHandler.RegisterReturnPayment)
 	})
 
 	router.Route("/user", func(userRoute chi.Router) {

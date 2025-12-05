@@ -314,6 +314,8 @@ func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 		ArrivalTime   MyTime  `json:"arrival_time"`
 		Items         string  `json:"items"`
 		TotalQuote    float64 `json:"total_quote"`
+		ItemWeight    float64 `json:"item_weight"`
+		CoDriverName  string  `json:"co_driver_name"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
@@ -339,8 +341,10 @@ func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 			Time:  time.Time(req.ArrivalTime),
 			Valid: true,
 		},
-		Items:      &req.Items,
-		TotalQuote: NewNullDecimalFromFloat(req.TotalCost),
+		Items:        &req.Items,
+		TotalQuote:   NewNullDecimalFromFloat(req.TotalCost),
+		ItemWeight:   NewNullDecimalFromFloat(req.ItemWeight),
+		CoDriverName: &req.CoDriverName,
 	}
 	if err := h.service.CreateTrip(r.Context(), tripData); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
@@ -723,4 +727,26 @@ func (h *DriverHandler) RegisterTripOverhead(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	responses.SuccessJSONResponse("trip overhead created successfully", overhead, http.StatusOK, w)
+}
+
+func (h *DriverHandler) RegisterReturnPayment(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Registering return payment")
+
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		responses.ErrorJSONResponse(fmt.Errorf("unauthorized action"), http.StatusUnauthorized, w, nil)
+		return
+	}
+
+	var req domain.ReturnPayment
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	payment, err := h.service.RegisterReturnPaymentService(r.Context(), req, userID)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+	responses.SuccessJSONResponse("return payment created successfully", payment, http.StatusOK, w)
 }
