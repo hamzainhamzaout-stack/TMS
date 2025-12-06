@@ -268,16 +268,19 @@ func (s *DriverService) ChangeCarDriver(ctx context.Context, driverID int32, car
 func (s *DriverService) CreateTrip(ctx context.Context, trip dm_svc_db.CreateTripParams) error {
 	s.logger.Info("Creating trip", "trip", trip)
 	tripReturning, err := s.queries.CreateTrip(ctx, dm_svc_db.CreateTripParams{
-		DriverID:      trip.DriverID,
-		TotalCost:     trip.TotalCost,
-		ApprovedBy:    trip.ApprovedBy,
-		Origin:        trip.Origin,
-		Destination:   trip.Destination,
-		DepartureTime: trip.DepartureTime,
-		ArrivalTime:   trip.ArrivalTime,
-		Items:         trip.Items,
-		ItemWeight:    trip.ItemWeight,
-		CoDriverName:  trip.CoDriverName,
+		DriverID:          trip.DriverID,
+		TotalCost:         trip.TotalCost,
+		ApprovedBy:        trip.ApprovedBy,
+		Origin:            trip.Origin,
+		Destination:       trip.Destination,
+		DepartureTime:     trip.DepartureTime,
+		ArrivalTime:       trip.ArrivalTime,
+		Items:             trip.Items,
+		ItemWeight:        trip.ItemWeight,
+		CoDriverName:      trip.CoDriverName,
+		TotalQuote:        trip.TotalQuote,
+		ClientName:        trip.ClientName,
+		ClientPhoneNumber: trip.ClientPhoneNumber,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create trip: %w", err)

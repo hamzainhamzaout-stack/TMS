@@ -306,16 +306,18 @@ func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		DriverID      int32   `json:"driver_id"`
-		TotalCost     float64 `json:"total_cost"`
-		Origin        string  `json:"origin"`
-		Destination   string  `json:"destination"`
-		DepartureTime MyTime  `json:"departure_time"`
-		ArrivalTime   MyTime  `json:"arrival_time"`
-		Items         string  `json:"items"`
-		TotalQuote    float64 `json:"total_quote"`
-		ItemWeight    float64 `json:"item_weight"`
-		CoDriverName  string  `json:"co_driver_name"`
+		DriverID          int32   `json:"driver_id"`
+		TotalCost         float64 `json:"total_cost"`
+		Origin            string  `json:"origin"`
+		Destination       string  `json:"destination"`
+		DepartureTime     MyTime  `json:"departure_time"`
+		ArrivalTime       MyTime  `json:"arrival_time"`
+		Items             string  `json:"items"`
+		TotalQuote        float64 `json:"total_quote"`
+		ItemWeight        float64 `json:"item_weight"`
+		CoDriverName      string  `json:"co_driver_name"`
+		ClientName        string  `json:"client_name"`
+		ClientPhoneNumber string  `json:"client_phone_number"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
@@ -341,10 +343,12 @@ func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 			Time:  time.Time(req.ArrivalTime),
 			Valid: true,
 		},
-		Items:        &req.Items,
-		TotalQuote:   NewNullDecimalFromFloat(req.TotalCost),
-		ItemWeight:   NewNullDecimalFromFloat(req.ItemWeight),
-		CoDriverName: &req.CoDriverName,
+		Items:             &req.Items,
+		TotalQuote:        NewNullDecimalFromFloat(req.TotalCost),
+		ItemWeight:        NewNullDecimalFromFloat(req.ItemWeight),
+		CoDriverName:      &req.CoDriverName,
+		ClientName:        &req.ClientName,
+		ClientPhoneNumber: &req.ClientPhoneNumber,
 	}
 	if err := h.service.CreateTrip(r.Context(), tripData); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
