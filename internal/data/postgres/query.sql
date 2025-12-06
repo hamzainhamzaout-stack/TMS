@@ -180,8 +180,8 @@ WHERE id = $2
 RETURNING *;
 
 -- name: CreateTrip :one
-INSERT INTO trip(driver_id, total_cost, approved_by, origin, destination, departure_time, arrival_time, items, total_quote, item_weight, co_driver_name)
-VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO trip(driver_id, total_cost, approved_by, origin, destination, departure_time, arrival_time, items, total_quote, item_weight, co_driver_name, client_name, client_phone_number)
+VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 RETURNING *;
 
 -- name: AddExpensesToTrip :exec

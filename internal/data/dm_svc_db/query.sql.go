@@ -291,23 +291,25 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 }
 
 const createTrip = `-- name: CreateTrip :one
-INSERT INTO trip(driver_id, total_cost, approved_by, origin, destination, departure_time, arrival_time, items, total_quote, item_weight, co_driver_name)
-VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name
+INSERT INTO trip(driver_id, total_cost, approved_by, origin, destination, departure_time, arrival_time, items, total_quote, item_weight, co_driver_name, client_name, client_phone_number)
+VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name, client_phone_number
 `
 
 type CreateTripParams struct {
-	DriverID      int32               `json:"driver_id"`
-	TotalCost     float64             `json:"total_cost"`
-	ApprovedBy    uuid.UUID           `json:"approved_by"`
-	Origin        *string             `json:"origin"`
-	Destination   *string             `json:"destination"`
-	DepartureTime pgtype.Timestamp    `json:"departure_time"`
-	ArrivalTime   pgtype.Timestamp    `json:"arrival_time"`
-	Items         *string             `json:"items"`
-	TotalQuote    decimal.NullDecimal `json:"total_quote"`
-	ItemWeight    decimal.NullDecimal `json:"item_weight"`
-	CoDriverName  *string             `json:"co_driver_name"`
+	DriverID          int32               `json:"driver_id"`
+	TotalCost         float64             `json:"total_cost"`
+	ApprovedBy        uuid.UUID           `json:"approved_by"`
+	Origin            *string             `json:"origin"`
+	Destination       *string             `json:"destination"`
+	DepartureTime     pgtype.Timestamp    `json:"departure_time"`
+	ArrivalTime       pgtype.Timestamp    `json:"arrival_time"`
+	Items             *string             `json:"items"`
+	TotalQuote        decimal.NullDecimal `json:"total_quote"`
+	ItemWeight        decimal.NullDecimal `json:"item_weight"`
+	CoDriverName      *string             `json:"co_driver_name"`
+	ClientName        *string             `json:"client_name"`
+	ClientPhoneNumber *string             `json:"client_phone_number"`
 }
 
 func (q *Queries) CreateTrip(ctx context.Context, arg CreateTripParams) (Trip, error) {
@@ -323,6 +325,8 @@ func (q *Queries) CreateTrip(ctx context.Context, arg CreateTripParams) (Trip, e
 		arg.TotalQuote,
 		arg.ItemWeight,
 		arg.CoDriverName,
+		arg.ClientName,
+		arg.ClientPhoneNumber,
 	)
 	var i Trip
 	err := row.Scan(
@@ -347,6 +351,7 @@ func (q *Queries) CreateTrip(ctx context.Context, arg CreateTripParams) (Trip, e
 		&i.ReturnedAmount,
 		&i.ItemWeight,
 		&i.CoDriverName,
+		&i.ClientPhoneNumber,
 	)
 	return i, err
 }
@@ -796,7 +801,7 @@ func (q *Queries) GetRoles(ctx context.Context) ([]Role, error) {
 
 const getTripDetail = `-- name: GetTripDetail :one
 SELECT
-  t.id, t.driver_id, t.total_cost, t.receipt_url, t.approved_by, t.isactive, t.created_at, t.updated_at, t.client_name, t.total_quote, t.paid_amount, t.payment_status, t.status, t.origin, t.destination, t.departure_time, t.arrival_time, t.items, t.returned_amount, t.item_weight, t.co_driver_name,
+  t.id, t.driver_id, t.total_cost, t.receipt_url, t.approved_by, t.isactive, t.created_at, t.updated_at, t.client_name, t.total_quote, t.paid_amount, t.payment_status, t.status, t.origin, t.destination, t.departure_time, t.arrival_time, t.items, t.returned_amount, t.item_weight, t.co_driver_name, t.client_phone_number,
   d.first_name AS driver_first_name,
   d.last_name AS driver_last_name,
   COALESCE(
@@ -834,31 +839,32 @@ WHERE t.id = $1
 `
 
 type GetTripDetailRow struct {
-	ID              int32               `json:"id"`
-	DriverID        int32               `json:"driver_id"`
-	TotalCost       float64             `json:"total_cost"`
-	ReceiptUrl      *string             `json:"receipt_url"`
-	ApprovedBy      uuid.UUID           `json:"approved_by"`
-	Isactive        bool                `json:"isactive"`
-	CreatedAt       pgtype.Timestamp    `json:"created_at"`
-	UpdatedAt       pgtype.Timestamp    `json:"updated_at"`
-	ClientName      *string             `json:"client_name"`
-	TotalQuote      decimal.NullDecimal `json:"total_quote"`
-	PaidAmount      decimal.NullDecimal `json:"paid_amount"`
-	PaymentStatus   NullPaymentStatus   `json:"payment_status"`
-	Status          NullTripStatus      `json:"status"`
-	Origin          *string             `json:"origin"`
-	Destination     *string             `json:"destination"`
-	DepartureTime   pgtype.Timestamp    `json:"departure_time"`
-	ArrivalTime     pgtype.Timestamp    `json:"arrival_time"`
-	Items           *string             `json:"items"`
-	ReturnedAmount  decimal.NullDecimal `json:"returned_amount"`
-	ItemWeight      decimal.NullDecimal `json:"item_weight"`
-	CoDriverName    *string             `json:"co_driver_name"`
-	DriverFirstName string              `json:"driver_first_name"`
-	DriverLastName  string              `json:"driver_last_name"`
-	Expenses        interface{}         `json:"expenses"`
-	Incomes         interface{}         `json:"incomes"`
+	ID                int32               `json:"id"`
+	DriverID          int32               `json:"driver_id"`
+	TotalCost         float64             `json:"total_cost"`
+	ReceiptUrl        *string             `json:"receipt_url"`
+	ApprovedBy        uuid.UUID           `json:"approved_by"`
+	Isactive          bool                `json:"isactive"`
+	CreatedAt         pgtype.Timestamp    `json:"created_at"`
+	UpdatedAt         pgtype.Timestamp    `json:"updated_at"`
+	ClientName        *string             `json:"client_name"`
+	TotalQuote        decimal.NullDecimal `json:"total_quote"`
+	PaidAmount        decimal.NullDecimal `json:"paid_amount"`
+	PaymentStatus     NullPaymentStatus   `json:"payment_status"`
+	Status            NullTripStatus      `json:"status"`
+	Origin            *string             `json:"origin"`
+	Destination       *string             `json:"destination"`
+	DepartureTime     pgtype.Timestamp    `json:"departure_time"`
+	ArrivalTime       pgtype.Timestamp    `json:"arrival_time"`
+	Items             *string             `json:"items"`
+	ReturnedAmount    decimal.NullDecimal `json:"returned_amount"`
+	ItemWeight        decimal.NullDecimal `json:"item_weight"`
+	CoDriverName      *string             `json:"co_driver_name"`
+	ClientPhoneNumber *string             `json:"client_phone_number"`
+	DriverFirstName   string              `json:"driver_first_name"`
+	DriverLastName    string              `json:"driver_last_name"`
+	Expenses          interface{}         `json:"expenses"`
+	Incomes           interface{}         `json:"incomes"`
 }
 
 func (q *Queries) GetTripDetail(ctx context.Context, id int32) (GetTripDetailRow, error) {
@@ -886,6 +892,7 @@ func (q *Queries) GetTripDetail(ctx context.Context, id int32) (GetTripDetailRow
 		&i.ReturnedAmount,
 		&i.ItemWeight,
 		&i.CoDriverName,
+		&i.ClientPhoneNumber,
 		&i.DriverFirstName,
 		&i.DriverLastName,
 		&i.Expenses,
@@ -955,7 +962,7 @@ func (q *Queries) GetTripTransactionDetail(ctx context.Context, tripID *int32) (
 }
 
 const getTrips = `-- name: GetTrips :many
-SELECT id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name
+SELECT id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name, client_phone_number
 FROM trip
 `
 
@@ -990,6 +997,7 @@ func (q *Queries) GetTrips(ctx context.Context) ([]Trip, error) {
 			&i.ReturnedAmount,
 			&i.ItemWeight,
 			&i.CoDriverName,
+			&i.ClientPhoneNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -1002,7 +1010,7 @@ func (q *Queries) GetTrips(ctx context.Context) ([]Trip, error) {
 }
 
 const getTripsByDriver = `-- name: GetTripsByDriver :many
-SELECT id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name
+SELECT id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name, client_phone_number
 FROM trip
 WHERE driver_id = $1
 `
@@ -1038,6 +1046,7 @@ func (q *Queries) GetTripsByDriver(ctx context.Context, driverID int32) ([]Trip,
 			&i.ReturnedAmount,
 			&i.ItemWeight,
 			&i.CoDriverName,
+			&i.ClientPhoneNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -1209,7 +1218,7 @@ SET
     returned_amount = returned_amount + $2,
     total_cost = total_cost - $2
 WHERE id = $1
-RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name
+RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name, client_phone_number
 `
 
 type RegisterReturnPaymentParams struct {
@@ -1242,6 +1251,7 @@ func (q *Queries) RegisterReturnPayment(ctx context.Context, arg RegisterReturnP
 		&i.ReturnedAmount,
 		&i.ItemWeight,
 		&i.CoDriverName,
+		&i.ClientPhoneNumber,
 	)
 	return i, err
 }
@@ -1506,7 +1516,7 @@ const updateTrip = `-- name: UpdateTrip :one
 UPDATE trip
 SET total_cost = $2, approved_by = $3, created_at = $4, updated_at = $5
 WHERE id = $1
-RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name
+RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name, client_phone_number
 `
 
 type UpdateTripParams struct {
@@ -1548,6 +1558,7 @@ func (q *Queries) UpdateTrip(ctx context.Context, arg UpdateTripParams) (Trip, e
 		&i.ReturnedAmount,
 		&i.ItemWeight,
 		&i.CoDriverName,
+		&i.ClientPhoneNumber,
 	)
 	return i, err
 }
@@ -1556,7 +1567,7 @@ const updateTripDriver = `-- name: UpdateTripDriver :one
 UPDATE trip
 SET driver_id = $2
 WHERE id = $1
-RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name
+RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name, client_phone_number
 `
 
 type UpdateTripDriverParams struct {
@@ -1589,6 +1600,7 @@ func (q *Queries) UpdateTripDriver(ctx context.Context, arg UpdateTripDriverPara
 		&i.ReturnedAmount,
 		&i.ItemWeight,
 		&i.CoDriverName,
+		&i.ClientPhoneNumber,
 	)
 	return i, err
 }
