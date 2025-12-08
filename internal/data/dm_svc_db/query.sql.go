@@ -1551,7 +1551,10 @@ SET
     items               = COALESCE($16, items),
     returned_amount     = COALESCE($17, returned_amount),
     client_phone_number = COALESCE($18, client_phone_number),
-    updated_at          = NOW()
+    updated_at          = NOW(),
+    returned_amount     = COALESCE($19, returned_amount),
+    item_weight         = COALESCE($20, item_weight),
+    co_driver_name      = COALESCE($21, co_driver_name)
 WHERE id = $1
 RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name, client_phone_number
 `
@@ -1575,6 +1578,9 @@ type UpdateTripParams struct {
 	Items             *string             `json:"items"`
 	ReturnedAmount    decimal.NullDecimal `json:"returned_amount"`
 	ClientPhoneNumber *string             `json:"client_phone_number"`
+	ReturnedAmount_2  decimal.NullDecimal `json:"returned_amount_2"`
+	ItemWeight        decimal.NullDecimal `json:"item_weight"`
+	CoDriverName      *string             `json:"co_driver_name"`
 }
 
 // -- name: UpdateTrip :one
@@ -1608,6 +1614,9 @@ func (q *Queries) UpdateTrip(ctx context.Context, arg UpdateTripParams) (Trip, e
 		arg.Items,
 		arg.ReturnedAmount,
 		arg.ClientPhoneNumber,
+		arg.ReturnedAmount_2,
+		arg.ItemWeight,
+		arg.CoDriverName,
 	)
 	var i Trip
 	err := row.Scan(

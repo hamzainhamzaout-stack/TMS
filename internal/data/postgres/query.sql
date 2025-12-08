@@ -34,7 +34,7 @@ WHERE phone_number = $1;
 -- name: GetUsers :many
 SELECT *
 FROM users
-WHERE user_state <> 'deleted';
+WHERE status <> 'deleted';
 
 -- name: GetOTPByUserID :one
 SELECT * FROM otps
@@ -415,7 +415,7 @@ RETURNING *;
 
 -- name: DeleteUser :exec
 UPDATE users
-SET user_state = 'deleted'
+SET status = 'deleted'
 WHERE id = $1;
 
 -- -- name: UpdateTrip :one
@@ -448,6 +448,9 @@ SET
     items               = COALESCE($16, items),
     returned_amount     = COALESCE($17, returned_amount),
     client_phone_number = COALESCE($18, client_phone_number),
-    updated_at          = NOW()
+    updated_at          = NOW(),
+    returned_amount     = COALESCE($19, returned_amount),
+    item_weight         = COALESCE($20, item_weight),
+    co_driver_name      = COALESCE($21, co_driver_name)
 WHERE id = $1
 RETURNING *;
