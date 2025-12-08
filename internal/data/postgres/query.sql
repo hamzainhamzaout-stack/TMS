@@ -33,7 +33,8 @@ WHERE phone_number = $1;
 
 -- name: GetUsers :many
 SELECT *
-FROM users;
+FROM users
+WHERE user_state <> 'deleted';
 
 -- name: GetOTPByUserID :one
 SELECT * FROM otps
@@ -203,11 +204,11 @@ SET driver_id = $2
 WHERE id = $1
 RETURNING *;
 
--- name: UpdateTrip :one
-UPDATE trip
-SET total_cost = $2, approved_by = $3, created_at = $4, updated_at = $5
-WHERE id = $1
-RETURNING *;
+-- -- name: updatetrip :one
+-- UPDATE trip
+-- SET total_cost = $2, approved_by = $3, created_at = $4, updated_at = $5
+-- WHERE id = $1
+-- RETURNING *;
 
 -- name: DeleteTrip :exec
 UPDATE trip
@@ -399,5 +400,54 @@ UPDATE trip
 SET
     returned_amount = returned_amount + $2,
     total_cost = total_cost - $2
+WHERE id = $1
+RETURNING *;
+
+-- name: UpdateUser :one
+UPDATE users
+SET
+  first_name    = COALESCE($2, first_name),
+  last_name     = COALESCE($3, last_name),
+  phone_number  = COALESCE($4, phone_number),
+  updated_at    = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING *;
+
+-- name: DeleteUser :exec
+UPDATE users
+SET user_state = 'deleted'
+WHERE id = $1;
+
+-- -- name: UpdateTrip :one
+-- UPDATE trip
+-- SET
+--     total_cost = COALESCE(total_cost, $2),
+--     approved_by = $3,
+--     created_at = $4,
+--     updated_at = $5
+-- WHERE id = $1
+-- RETURNING *;
+
+-- name: UpdateTrip :one
+UPDATE trip
+SET
+    driver_id           = COALESCE($2, driver_id),
+    total_cost          = COALESCE($3, total_cost),
+    receipt_url         = COALESCE($4, receipt_url),
+    approved_by         = COALESCE($5, approved_by),
+    isactive            = COALESCE($6, isactive),
+    client_name         = COALESCE($7, client_name),
+    total_quote         = COALESCE($8, total_quote),
+    paid_amount         = COALESCE($9, paid_amount),
+    payment_status      = COALESCE($10, payment_status),
+    status              = COALESCE($11, status),
+    origin              = COALESCE($12, origin),
+    destination         = COALESCE($13, destination),
+    departure_time      = COALESCE($14, departure_time),
+    arrival_time        = COALESCE($15, arrival_time),
+    items               = COALESCE($16, items),
+    returned_amount     = COALESCE($17, returned_amount),
+    client_phone_number = COALESCE($18, client_phone_number),
+    updated_at          = NOW()
 WHERE id = $1
 RETURNING *;

@@ -469,13 +469,30 @@ func (q *Queries) DeleteRole(ctx context.Context, id int32) error {
 }
 
 const deleteTrip = `-- name: DeleteTrip :exec
+
 UPDATE trip
 SET isActive = false
 WHERE id = $1
 `
 
+// -- name: updatetrip :one
+// UPDATE trip
+// SET total_cost = $2, approved_by = $3, created_at = $4, updated_at = $5
+// WHERE id = $1
+// RETURNING *;
 func (q *Queries) DeleteTrip(ctx context.Context, id int32) error {
 	_, err := q.db.Exec(ctx, deleteTrip, id)
+	return err
+}
+
+const deleteUser = `-- name: DeleteUser :exec
+UPDATE users
+SET user_state = 'deleted'
+WHERE id = $1
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUser, id)
 	return err
 }
 
@@ -1084,6 +1101,7 @@ func (q *Queries) GetUserByPhoneNumber(ctx context.Context, phoneNumber string) 
 const getUsers = `-- name: GetUsers :many
 SELECT id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at
 FROM users
+WHERE user_state <> 'deleted'
 `
 
 func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
@@ -1513,27 +1531,83 @@ func (q *Queries) UpdateRole(ctx context.Context, arg UpdateRoleParams) (Role, e
 }
 
 const updateTrip = `-- name: UpdateTrip :one
+
 UPDATE trip
-SET total_cost = $2, approved_by = $3, created_at = $4, updated_at = $5
+SET
+    driver_id           = COALESCE($2, driver_id),
+    total_cost          = COALESCE($3, total_cost),
+    receipt_url         = COALESCE($4, receipt_url),
+    approved_by         = COALESCE($5, approved_by),
+    isactive            = COALESCE($6, isactive),
+    client_name         = COALESCE($7, client_name),
+    total_quote         = COALESCE($8, total_quote),
+    paid_amount         = COALESCE($9, paid_amount),
+    payment_status      = COALESCE($10, payment_status),
+    status              = COALESCE($11, status),
+    origin              = COALESCE($12, origin),
+    destination         = COALESCE($13, destination),
+    departure_time      = COALESCE($14, departure_time),
+    arrival_time        = COALESCE($15, arrival_time),
+    items               = COALESCE($16, items),
+    returned_amount     = COALESCE($17, returned_amount),
+    client_phone_number = COALESCE($18, client_phone_number),
+    updated_at          = NOW()
 WHERE id = $1
 RETURNING id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name, client_phone_number
 `
 
 type UpdateTripParams struct {
-	ID         int32            `json:"id"`
-	TotalCost  float64          `json:"total_cost"`
-	ApprovedBy uuid.UUID        `json:"approved_by"`
-	CreatedAt  pgtype.Timestamp `json:"created_at"`
-	UpdatedAt  pgtype.Timestamp `json:"updated_at"`
+	ID                int32               `json:"id"`
+	DriverID          int32               `json:"driver_id"`
+	TotalCost         float64             `json:"total_cost"`
+	ReceiptUrl        *string             `json:"receipt_url"`
+	ApprovedBy        uuid.UUID           `json:"approved_by"`
+	Isactive          bool                `json:"isactive"`
+	ClientName        *string             `json:"client_name"`
+	TotalQuote        decimal.NullDecimal `json:"total_quote"`
+	PaidAmount        decimal.NullDecimal `json:"paid_amount"`
+	PaymentStatus     NullPaymentStatus   `json:"payment_status"`
+	Status            NullTripStatus      `json:"status"`
+	Origin            *string             `json:"origin"`
+	Destination       *string             `json:"destination"`
+	DepartureTime     pgtype.Timestamp    `json:"departure_time"`
+	ArrivalTime       pgtype.Timestamp    `json:"arrival_time"`
+	Items             *string             `json:"items"`
+	ReturnedAmount    decimal.NullDecimal `json:"returned_amount"`
+	ClientPhoneNumber *string             `json:"client_phone_number"`
 }
 
+// -- name: UpdateTrip :one
+// UPDATE trip
+// SET
+//
+//	total_cost = COALESCE(total_cost, $2),
+//	approved_by = $3,
+//	created_at = $4,
+//	updated_at = $5
+//
+// WHERE id = $1
+// RETURNING *;
 func (q *Queries) UpdateTrip(ctx context.Context, arg UpdateTripParams) (Trip, error) {
 	row := q.db.QueryRow(ctx, updateTrip,
 		arg.ID,
+		arg.DriverID,
 		arg.TotalCost,
+		arg.ReceiptUrl,
 		arg.ApprovedBy,
-		arg.CreatedAt,
-		arg.UpdatedAt,
+		arg.Isactive,
+		arg.ClientName,
+		arg.TotalQuote,
+		arg.PaidAmount,
+		arg.PaymentStatus,
+		arg.Status,
+		arg.Origin,
+		arg.Destination,
+		arg.DepartureTime,
+		arg.ArrivalTime,
+		arg.Items,
+		arg.ReturnedAmount,
+		arg.ClientPhoneNumber,
 	)
 	var i Trip
 	err := row.Scan(
@@ -1645,6 +1719,46 @@ type UpdateTripReceiptURLParams struct {
 func (q *Queries) UpdateTripReceiptURL(ctx context.Context, arg UpdateTripReceiptURLParams) error {
 	_, err := q.db.Exec(ctx, updateTripReceiptURL, arg.ID, arg.ReceiptUrl)
 	return err
+}
+
+const updateUser = `-- name: UpdateUser :one
+UPDATE users
+SET
+  first_name    = COALESCE($2, first_name),
+  last_name     = COALESCE($3, last_name),
+  phone_number  = COALESCE($4, phone_number),
+  updated_at    = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at
+`
+
+type UpdateUserParams struct {
+	ID          uuid.UUID `json:"id"`
+	FirstName   string    `json:"first_name"`
+	LastName    string    `json:"last_name"`
+	PhoneNumber string    `json:"phone_number"`
+}
+
+func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUser,
+		arg.ID,
+		arg.FirstName,
+		arg.LastName,
+		arg.PhoneNumber,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.FirstName,
+		&i.LastName,
+		&i.PasswordHash,
+		&i.PhoneNumber,
+		&i.RoleID,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateUserPassword = `-- name: UpdateUserPassword :exec

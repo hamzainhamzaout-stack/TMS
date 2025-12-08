@@ -57,6 +57,47 @@ func (ah *AuthHandler) CreateUserHandler(w http.ResponseWriter, r *http.Request)
 	responses.SuccessJSONResponse("success", userResponse, http.StatusOK, w)
 }
 
+func (ah *AuthHandler) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
+	ah.logger.Info("UpdateUserHandler handler started")
+	var userProfileData domain.UserUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&userProfileData); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	userID := chi.URLParam(r, "id")
+	user, err := ah.service.UpdateUserService(r.Context(), userID, userProfileData)
+	if err != nil {
+		if err.Error() == fmt.Sprintf("user with email '%s' already exists", userProfileData.PhoneNumber) {
+			responses.ErrorJSONResponse(err, http.StatusConflict, w, nil)
+			return
+		}
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	userResponse := domain.User{
+		FirstName:   user.FirstName,
+		LastName:    user.LastName,
+		PhoneNumber: user.PhoneNumber,
+		RoleID:      user.RoleID,
+	}
+
+	responses.SuccessJSONResponse("success", userResponse, http.StatusOK, w)
+}
+
+func (ah *AuthHandler) DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
+	ah.logger.Info("DeleteUserHandler handler started")
+	userID := chi.URLParam(r, "id")
+	err := ah.service.DeleteUserService(r.Context(), userID)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	responses.SuccessJSONResponse("success", nil, http.StatusOK, w)
+}
+
 func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	ah.logger.Info("Login handler started")
 	if r.TLS != nil {

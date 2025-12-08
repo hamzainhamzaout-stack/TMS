@@ -346,3 +346,43 @@ func (as *AuthService) UpdateUserProfile(ctx context.Context, userID string, req
 
 	return &user, nil
 }
+func (s *AuthService) UpdateUserService(ctx context.Context, userID string, userProfileData domain.UserUpdateRequest) (*dm_svc_db.User, error) {
+	s.logger.Info("UpdateUserService service started")
+
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	params := dm_svc_db.UpdateUserParams{
+		ID:          userUUID,
+		FirstName:   userProfileData.FirstName,
+		LastName:    userProfileData.LastName,
+		PhoneNumber: userProfileData.PhoneNumber,
+	}
+
+	user, err := s.queries.UpdateUser(ctx, params)
+	if err != nil {
+		s.logger.Error("Failed to update user", "error", err)
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+func (s *AuthService) DeleteUserService(ctx context.Context, userID string) error {
+	s.logger.Info("DeleteUserService service started")
+
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return err
+	}
+
+	err = s.queries.DeleteUser(ctx, userUUID)
+	if err != nil {
+		s.logger.Error("Failed to delete user", "error", err)
+		return err
+	}
+
+	return nil
+}
