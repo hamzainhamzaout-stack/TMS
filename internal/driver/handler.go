@@ -363,6 +363,19 @@ func (h *DriverHandler) UpdateTrip(w http.ResponseWriter, r *http.Request) {
 		responses.ErrorJSONResponse(errors.New("authentication required"), http.StatusUnauthorized, w, nil)
 		return
 	}
+	tripID := chi.URLParam(r, "trip_id")
+
+	if tripID == "" {
+		responses.ErrorJSONResponse(errors.New("trip id is required"), http.StatusBadRequest, w, nil)
+		return
+	}
+
+	tripIDInt, err := strconv.Atoi(tripID)
+	if err != nil {
+		responses.ErrorJSONResponse(errors.New("invalid trip id"), http.StatusBadRequest, w, nil)
+		return
+	}
+
 	// var req dm_svc_db.UpdateTripParams
 	var req struct {
 		DriverID          int32   `json:"driver_id"`
@@ -390,6 +403,7 @@ func (h *DriverHandler) UpdateTrip(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tripData := dm_svc_db.UpdateTripParams{
+		ID:          int32(tripIDInt),
 		DriverID:    req.DriverID,
 		ApprovedBy:  approvedBy,
 		TotalCost:   req.TotalCost,
