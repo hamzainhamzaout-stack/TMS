@@ -13,6 +13,12 @@ type User struct {
 	RoleID int32 `json:"role_id"`
 }
 
+type UserUpdateRequest struct {
+	FirstName   string `json:"first_name"`
+	LastName    string `json:"last_name"`
+	PhoneNumber string `json:"phone_number"`
+}
+
 type Role struct {
 	ID   int32  `json:"id"`
 	Name string `json:"name"`

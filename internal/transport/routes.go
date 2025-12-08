@@ -56,6 +56,8 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 		adminRoute.Route("/user", func(r chi.Router) {
 			r.Post("/", di.AuthHandler.CreateUserHandler)
 			r.Get("/list", di.AuthHandler.GetUsersHandler)
+			r.Patch("/{id}", di.AuthHandler.UpdateUserHandler)
+			r.Delete("/{id}", di.AuthHandler.DeleteUserHandler)
 		})
 		adminRoute.Route("/role", func(r chi.Router) {
 			r.Get("/", di.AuthHandler.GetRolesHandler)

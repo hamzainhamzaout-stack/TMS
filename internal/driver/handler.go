@@ -439,15 +439,10 @@ func (h *DriverHandler) TripDetail(w http.ResponseWriter, r *http.Request) {
 // 		return
 // 	}
 
-// 	var createTripExpense TripExpense
-// }
-
+//		var createTripExpense TripExpense
+//	}
 func (h *DriverHandler) CreateTripExpenseHandler(w http.ResponseWriter, r *http.Request) {
-
-	h.logger.Info("Uploading receipt")
-
 	tripID, err := strconv.Atoi(chi.URLParam(r, "id"))
-
 	if err != nil {
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
 		return
@@ -457,45 +452,51 @@ func (h *DriverHandler) CreateTripExpenseHandler(w http.ResponseWriter, r *http.
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
 		return
 	}
+
+	var receiptURL string
+
 	file, header, err := r.FormFile("receipt")
 	if err != nil {
-		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
-		return
-	}
-	defer file.Close()
+		if !errors.Is(err, http.ErrMissingFile) {
+			responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+			return
+		}
+		// No receipt uploaded → proceed without uploading
+	} else {
+		defer file.Close()
 
-	h.logger.Info("File uploaded successfully", "filename", header.Filename, "size", header.Size)
+		h.logger.Info("Uploading receipt", "filename", header.Filename, "size", header.Size)
 
-	uploadResult, err := h.cloudinary.Upload.Upload(r.Context(), file, uploader.UploadParams{})
-	if err != nil {
-		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
-		return
+		uploadResult, err := h.cloudinary.Upload.Upload(r.Context(), file, uploader.UploadParams{})
+		if err != nil {
+			responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+			return
+		}
+
+		receiptURL = uploadResult.SecureURL
 	}
-	receiptURL := uploadResult.SecureURL
-	// if err := h.service.UploadReceiptService(r.Context(), int32(tripID), receiptURL); err != nil {
-	// 	responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
-	// 	return
-	// }
 
 	expenseIDStr := r.FormValue("expense_id")
 	if expenseIDStr == "" {
-		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		responses.ErrorJSONResponse(errors.New("expense_id is required"), http.StatusBadRequest, w, nil)
 		return
 	}
+
 	costStr := r.FormValue("cost")
 	if costStr == "" {
-		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		responses.ErrorJSONResponse(errors.New("cost is required"), http.StatusBadRequest, w, nil)
 		return
 	}
+
 	cost, err := strconv.ParseFloat(costStr, 64)
 	if err != nil {
-		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
 		return
 	}
 
 	expenseID, err := strconv.Atoi(expenseIDStr)
 	if err != nil {
-		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
 		return
 	}
 
@@ -505,9 +506,82 @@ func (h *DriverHandler) CreateTripExpenseHandler(w http.ResponseWriter, r *http.
 		Cost:      cost,
 		ImageURL:  receiptURL,
 	}
+
 	res, err := h.service.CreateTripExpenseService(r.Context(), expenseTrip)
-	responses.SuccessJSONResponse("receipt uploaded successfully", res.TripID, http.StatusOK, w)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	responses.SuccessJSONResponse("expense added successfully", res.TripID, http.StatusOK, w)
 }
+
+// func (h *DriverHandler) CreateTripExpenseHandler(w http.ResponseWriter, r *http.Request) {
+
+// 	h.logger.Info("Uploading receipt")
+
+// 	tripID, err := strconv.Atoi(chi.URLParam(r, "id"))
+
+// 	if err != nil {
+// 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+// 		return
+// 	}
+
+// 	if err := r.ParseMultipartForm(10 << 20); err != nil {
+// 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+// 		return
+// 	}
+// 	file, header, err := r.FormFile("receipt")
+// 	if err != nil {
+// 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+// 		return
+// 	}
+// 	defer file.Close()
+
+// 	h.logger.Info("File uploaded successfully", "filename", header.Filename, "size", header.Size)
+
+// 	uploadResult, err := h.cloudinary.Upload.Upload(r.Context(), file, uploader.UploadParams{})
+// 	if err != nil {
+// 		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+// 		return
+// 	}
+// 	receiptURL := uploadResult.SecureURL
+// 	// if err := h.service.UploadReceiptService(r.Context(), int32(tripID), receiptURL); err != nil {
+// 	// 	responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+// 	// 	return
+// 	// }
+
+// 	expenseIDStr := r.FormValue("expense_id")
+// 	if expenseIDStr == "" {
+// 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+// 		return
+// 	}
+// 	costStr := r.FormValue("cost")
+// 	if costStr == "" {
+// 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+// 		return
+// 	}
+// 	cost, err := strconv.ParseFloat(costStr, 64)
+// 	if err != nil {
+// 		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+// 		return
+// 	}
+
+// 	expenseID, err := strconv.Atoi(expenseIDStr)
+// 	if err != nil {
+// 		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+// 		return
+// 	}
+
+// 	expenseTrip := domain.TripExpense{
+// 		TripID:    tripID,
+// 		ExpenseID: expenseID,
+// 		Cost:      cost,
+// 		ImageURL:  receiptURL,
+// 	}
+// 	res, err := h.service.CreateTripExpenseService(r.Context(), expenseTrip)
+// 	responses.SuccessJSONResponse("receipt uploaded successfully", res.TripID, http.StatusOK, w)
+// }
 
 func (h *DriverHandler) GetExpenseTypes(w http.ResponseWriter, r *http.Request) {
 
