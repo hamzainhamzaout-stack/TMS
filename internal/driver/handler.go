@@ -363,7 +363,7 @@ func (h *DriverHandler) UpdateTrip(w http.ResponseWriter, r *http.Request) {
 		responses.ErrorJSONResponse(errors.New("authentication required"), http.StatusUnauthorized, w, nil)
 		return
 	}
-	tripID := chi.URLParam(r, "trip_id")
+	tripID := chi.URLParam(r, "id")
 
 	if tripID == "" {
 		responses.ErrorJSONResponse(errors.New("trip id is required"), http.StatusBadRequest, w, nil)
