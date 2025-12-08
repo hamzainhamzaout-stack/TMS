@@ -487,7 +487,7 @@ func (q *Queries) DeleteTrip(ctx context.Context, id int32) error {
 
 const deleteUser = `-- name: DeleteUser :exec
 UPDATE users
-SET user_state = 'deleted'
+SET status = 'deleted'
 WHERE id = $1
 `
 
@@ -1101,7 +1101,7 @@ func (q *Queries) GetUserByPhoneNumber(ctx context.Context, phoneNumber string) 
 const getUsers = `-- name: GetUsers :many
 SELECT id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at
 FROM users
-WHERE user_state <> 'deleted'
+WHERE status <> 'deleted'
 `
 
 func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
