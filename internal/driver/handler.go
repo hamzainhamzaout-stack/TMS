@@ -358,10 +358,57 @@ func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DriverHandler) UpdateTrip(w http.ResponseWriter, r *http.Request) {
-	var tripData dm_svc_db.UpdateTripParams
-	if err := json.NewDecoder(r.Body).Decode(&tripData); err != nil {
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		responses.ErrorJSONResponse(errors.New("authentication required"), http.StatusUnauthorized, w, nil)
+		return
+	}
+	// var req dm_svc_db.UpdateTripParams
+	var req struct {
+		DriverID          int32   `json:"driver_id"`
+		TotalCost         float64 `json:"total_cost"`
+		Origin            string  `json:"origin"`
+		Destination       string  `json:"destination"`
+		DepartureTime     MyTime  `json:"departure_time"`
+		ArrivalTime       MyTime  `json:"arrival_time"`
+		Items             string  `json:"items"`
+		TotalQuote        float64 `json:"total_quote"`
+		ItemWeight        float64 `json:"item_weight"`
+		CoDriverName      string  `json:"co_driver_name"`
+		ClientName        string  `json:"client_name"`
+		ClientPhoneNumber string  `json:"client_phone_number"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
 		return
+	}
+
+	approvedBy, err := uuid.Parse(userID)
+	if err != nil {
+		responses.ErrorJSONResponse(errors.New("invalid user ID in token"), http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	tripData := dm_svc_db.UpdateTripParams{
+		DriverID:    req.DriverID,
+		ApprovedBy:  approvedBy,
+		TotalCost:   req.TotalCost,
+		Origin:      &req.Origin,
+		Destination: &req.Destination,
+		DepartureTime: pgtype.Timestamp{
+			Time:  time.Time(req.DepartureTime),
+			Valid: true,
+		},
+		ArrivalTime: pgtype.Timestamp{
+			Time:  time.Time(req.ArrivalTime),
+			Valid: true,
+		},
+		Items:             &req.Items,
+		TotalQuote:        NewNullDecimalFromFloat(req.TotalCost),
+		ItemWeight:        NewNullDecimalFromFloat(req.ItemWeight),
+		CoDriverName:      &req.CoDriverName,
+		ClientName:        &req.ClientName,
+		ClientPhoneNumber: &req.ClientPhoneNumber,
 	}
 	trip, err := h.service.UpdateTrip(r.Context(), &tripData)
 	if err != nil {
