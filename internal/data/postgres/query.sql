@@ -449,8 +449,7 @@ SET
     returned_amount     = COALESCE($17, returned_amount),
     client_phone_number = COALESCE($18, client_phone_number),
     updated_at          = NOW(),
-    returned_amount     = COALESCE($19, returned_amount),
-    item_weight         = COALESCE($20, item_weight),
-    co_driver_name      = COALESCE($21, co_driver_name)
+    item_weight         = COALESCE($19, item_weight),
+    co_driver_name      = COALESCE($20, co_driver_name)
 WHERE id = $1
 RETURNING *;
