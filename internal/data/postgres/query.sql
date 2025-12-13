@@ -181,8 +181,8 @@ WHERE id = $2
 RETURNING *;
 
 -- name: CreateTrip :one
-INSERT INTO trip(driver_id, total_cost, approved_by, origin, destination, departure_time, arrival_time, items, total_quote, item_weight, co_driver_name, client_name, client_phone_number)
-VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+INSERT INTO trip(driver_id, total_cost, approved_by, origin, destination, departure_time, arrival_time, items, total_quote, item_weight, co_driver_name, client_name, client_phone_number, settlement_due_date, status)
+VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 RETURNING *;
 
 -- name: AddExpensesToTrip :exec
@@ -309,9 +309,10 @@ INSERT INTO transactions (
     payment_method,
     handled_by,
     handler_name,
-    notes
+    notes,
+    transaction_date
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
+    $1, $2, $3, $4, $5, $6, $7, $8
 ) RETURNING *;
 -- name: UpdateTripPaymentState :exec
 UPDATE trip

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/Robotech-Org/driver-management/internal/config"
 	"github.com/Robotech-Org/driver-management/internal/data/dm_svc_db"
@@ -417,6 +418,10 @@ func (s *DriverService) RegisterAdvancePaymentService(ctx context.Context, trans
 		}, // The missing piece
 		HandlerName: &transaction.ReceiverName, // You should fetch real name
 		Notes:       &transaction.Notes,
+		TransactionDate: pgtype.Timestamp{
+			Time:  time.Time(transaction.TransactionDate),
+			Valid: true,
+		},
 	})
 	if err != nil {
 		return dm_svc_db.Transaction{}, err
@@ -440,7 +445,15 @@ func (s *DriverService) RegisterAdvancePaymentService(ctx context.Context, trans
 func (s *DriverService) RegisterFinalPaymentService(ctx context.Context, transaction domain.Transaction, userID string) (dm_svc_db.Transaction, error) {
 	userUUID, _ := uuid.Parse(userID)
 	tripID := int32(transaction.TripID)
-	txRecord, err := s.queries.CreateTransaction(ctx, dm_svc_db.CreateTransactionParams{
+	tx, err := s.cfg.DB.Begin(ctx)
+	if err != nil {
+		return dm_svc_db.Transaction{}, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.queries.WithTx(tx)
+
+	txRecord, err := qtx.CreateTransaction(ctx, dm_svc_db.CreateTransactionParams{
 		TripID:        &tripID,
 		Amount:        transaction.Amount,
 		Category:      dm_svc_db.TransactionCategoryINCOMEFINAL,
@@ -451,6 +464,10 @@ func (s *DriverService) RegisterFinalPaymentService(ctx context.Context, transac
 		},
 		HandlerName: &transaction.ReceiverName,
 		Notes:       &transaction.Notes,
+		TransactionDate: pgtype.Timestamp{
+			Time:  time.Time(transaction.TransactionDate),
+			Valid: true,
+		},
 	})
 	if err != nil {
 		return dm_svc_db.Transaction{}, err
@@ -458,7 +475,7 @@ func (s *DriverService) RegisterFinalPaymentService(ctx context.Context, transac
 
 	paidAmountDecimal := decimal.NewFromFloat(transaction.Amount)
 
-	err = s.queries.UpdateTripPaymentState(ctx, dm_svc_db.UpdateTripPaymentStateParams{
+	err = qtx.UpdateTripPaymentState(ctx, dm_svc_db.UpdateTripPaymentStateParams{
 		ID: tripID,
 		PaidAmount: decimal.NullDecimal{
 			Decimal: paidAmountDecimal,
@@ -467,6 +484,21 @@ func (s *DriverService) RegisterFinalPaymentService(ctx context.Context, transac
 	})
 	if err != nil {
 		return dm_svc_db.Transaction{}, fmt.Errorf("failed to update trip status: %v", err)
+	}
+
+	_, err = qtx.UpdateTrip(ctx, dm_svc_db.UpdateTripParams{
+		ID: tripID,
+		Status: dm_svc_db.NullTripStatus{
+			TripStatus: dm_svc_db.TripStatusCOMPLETED,
+			Valid:      true,
+		},
+	})
+	if err != nil {
+		return dm_svc_db.Transaction{}, fmt.Errorf("failed to update trip status: %v", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return dm_svc_db.Transaction{}, fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
 	return txRecord, nil
