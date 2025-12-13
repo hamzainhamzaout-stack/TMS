@@ -1,6 +1,8 @@
 package domain
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+)
 
 type CreateTripParams struct {
 	DriverID int32 `json:"driver_id"`
@@ -23,14 +25,15 @@ type TripExpense struct {
 }
 
 type Transaction struct {
-	ID           int     `json:"id"`
-	TripID       int     `json:"trip_id"`
-	Amount       float64 `json:"amount"`
-	Type         string  `json:"type"`
-	Method       string  `json:"method"`
-	ReceiverID   string  `json:"receiver_id"`
-	ReceiverName string  `json:"receiver_name"`
-	Notes        string  `json:"notes"`
+	ID              int     `json:"id"`
+	TripID          int     `json:"trip_id"`
+	Amount          float64 `json:"amount"`
+	Type            string  `json:"type"`
+	Method          string  `json:"method"`
+	ReceiverID      string  `json:"receiver_id"`
+	ReceiverName    string  `json:"receiver_name"`
+	Notes           string  `json:"notes"`
+	TransactionDate MyTime  `json:"transaction_date"`
 }
 
 type MaintenanceAddition struct {
