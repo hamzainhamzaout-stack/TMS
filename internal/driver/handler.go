@@ -333,7 +333,7 @@ func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 			Valid: true,
 		},
 		Items:             &req.Items,
-		TotalQuote:        NewNullDecimalFromFloat(req.TotalCost),
+		TotalQuote:        NewNullDecimalFromFloat(req.TotalQuote),
 		ItemWeight:        NewNullDecimalFromFloat(req.ItemWeight),
 		CoDriverName:      &req.CoDriverName,
 		ClientName:        &req.ClientName,
