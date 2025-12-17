@@ -268,21 +268,7 @@ func (s *DriverService) ChangeCarDriver(ctx context.Context, driverID int32, car
 
 func (s *DriverService) CreateTrip(ctx context.Context, trip dm_svc_db.CreateTripParams) error {
 	s.logger.Info("Creating trip", "trip", trip)
-	tripReturning, err := s.queries.CreateTrip(ctx, dm_svc_db.CreateTripParams{
-		DriverID:          trip.DriverID,
-		TotalCost:         trip.TotalCost,
-		ApprovedBy:        trip.ApprovedBy,
-		Origin:            trip.Origin,
-		Destination:       trip.Destination,
-		DepartureTime:     trip.DepartureTime,
-		ArrivalTime:       trip.ArrivalTime,
-		Items:             trip.Items,
-		ItemWeight:        trip.ItemWeight,
-		CoDriverName:      trip.CoDriverName,
-		TotalQuote:        trip.TotalQuote,
-		ClientName:        trip.ClientName,
-		ClientPhoneNumber: trip.ClientPhoneNumber,
-	})
+	tripReturning, err := s.queries.CreateTrip(ctx, trip)
 	if err != nil {
 		return fmt.Errorf("failed to create trip: %w", err)
 	}
@@ -483,18 +469,27 @@ func (s *DriverService) RegisterFinalPaymentService(ctx context.Context, transac
 		},
 	})
 	if err != nil {
-		return dm_svc_db.Transaction{}, fmt.Errorf("failed to update trip status: %v", err)
+		return dm_svc_db.Transaction{}, fmt.Errorf("failed to update trip payment status: %v", err)
 	}
 
-	_, err = qtx.UpdateTrip(ctx, dm_svc_db.UpdateTripParams{
+	// _, err = qtx.UpdateTrip(ctx, dm_svc_db.UpdateTripParams{
+	// 	ID:       tripID,
+	// 	DriverID: tripData.DriverID,
+	// 	Status: dm_svc_db.NullTripStatus{
+	// 		TripStatus: dm_svc_db.TripStatusCOMPLETED,
+	// 		Valid:      true,
+	// 	},
+	// 	ApprovedBy: userUUID,
+	// })
+
+	if err = qtx.UpdateTripState(ctx, dm_svc_db.UpdateTripStateParams{
 		ID: tripID,
 		Status: dm_svc_db.NullTripStatus{
 			TripStatus: dm_svc_db.TripStatusCOMPLETED,
 			Valid:      true,
 		},
-	})
-	if err != nil {
-		return dm_svc_db.Transaction{}, fmt.Errorf("failed to update trip status: %v", err)
+	}); err != nil {
+		return dm_svc_db.Transaction{}, fmt.Errorf("failed to update trip : %v", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {

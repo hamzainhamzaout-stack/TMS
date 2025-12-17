@@ -1742,6 +1742,22 @@ func (q *Queries) UpdateTripReceiptURL(ctx context.Context, arg UpdateTripReceip
 	return err
 }
 
+const updateTripState = `-- name: UpdateTripState :exec
+UPDATE trip
+SET status = $2
+WHERE id = $1
+`
+
+type UpdateTripStateParams struct {
+	ID     int32          `json:"id"`
+	Status NullTripStatus `json:"status"`
+}
+
+func (q *Queries) UpdateTripState(ctx context.Context, arg UpdateTripStateParams) error {
+	_, err := q.db.Exec(ctx, updateTripState, arg.ID, arg.Status)
+	return err
+}
+
 const updateUser = `-- name: UpdateUser :one
 UPDATE users
 SET
