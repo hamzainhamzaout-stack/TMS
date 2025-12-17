@@ -314,6 +314,7 @@ INSERT INTO transactions (
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8
 ) RETURNING *;
+
 -- name: UpdateTripPaymentState :exec
 UPDATE trip
 SET
@@ -454,3 +455,8 @@ SET
     co_driver_name      = COALESCE($20, co_driver_name)
 WHERE id = $1
 RETURNING *;
+
+-- name: UpdateTripState :exec
+UPDATE trip
+SET status = $2
+WHERE id = $1;
