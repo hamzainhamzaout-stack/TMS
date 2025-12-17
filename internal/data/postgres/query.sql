@@ -267,6 +267,7 @@ SELECT
         'category', tr.category,
         'payment_method', tr.payment_method,
         'notes', tr.notes,
+        'transaction_date', tr.transaction_date,
         'created_at', tr.created_at
       )
     )
