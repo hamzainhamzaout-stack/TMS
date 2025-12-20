@@ -11,7 +11,6 @@ import (
 	"github.com/Robotech-Org/driver-management/internal/config"
 	"github.com/Robotech-Org/driver-management/internal/data/dm_svc_db"
 	"github.com/Robotech-Org/driver-management/internal/domain"
-	"github.com/Robotech-Org/driver-management/utils/gens"
 	"github.com/Robotech-Org/driver-management/utils/tokenGen"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -33,11 +32,11 @@ func NewAuthService(logger *slog.Logger, queries dm_svc_db.Queries, config confi
 	}
 }
 
-func (as *AuthService) Login(ctx context.Context, phoneNumber, plainTextPassword string) (string, string, string, error) {
+func (as *AuthService) Login(ctx context.Context, userName, plainTextPassword string) (string, string, string, error) {
 	as.logger.Info("Login service started")
 	var access, refresh, reset string
 
-	user, err := as.queries.GetUserByPhoneNumber(ctx, phoneNumber)
+	user, err := as.queries.GetUserByUserName(ctx, userName)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -45,7 +44,7 @@ func (as *AuthService) Login(ctx context.Context, phoneNumber, plainTextPassword
 
 	switch user.Status {
 	case "uninitialized":
-		userID, err := as.ValidateOTPService(ctx, phoneNumber, plainTextPassword)
+		userID, err := as.ValidateOTPService(ctx, userName, plainTextPassword)
 		if err != nil {
 			return "", "", "", err
 		}
@@ -103,9 +102,9 @@ func (as *AuthService) RefreshTokenService(ctx context.Context, refreshToken str
 	return access, refresh, nil
 }
 
-func (as *AuthService) ValidateOTPService(ctx context.Context, phoneNumber string, userOTP string) (string, error) {
+func (as *AuthService) ValidateOTPService(ctx context.Context, userName string, userOTP string) (string, error) {
 	as.logger.Info("OTP validation service started")
-	user, err := as.queries.GetUserByPhoneNumber(ctx, phoneNumber)
+	user, err := as.queries.GetUserByUserName(ctx, userName)
 	if err != nil {
 		log.Println("Error when getting user by email")
 		return "", err
@@ -147,13 +146,13 @@ func (as *AuthService) ValidateOTPService(ctx context.Context, phoneNumber strin
 	return user.ID.String(), nil
 }
 
-func (as *AuthService) CreateUser(ctx context.Context, user domain.User) (*dm_svc_db.User, error) {
+func (as *AuthService) CreateUser(ctx context.Context, user domain.UserCreate) (*dm_svc_db.User, error) {
 	as.logger.Info("CreateUser service started")
-	plainTextPassword, err := gens.GenerateRandomPassword()
-	if err != nil {
-		return nil, err
-	}
-	log.Printf("Generated password: %s", plainTextPassword)
+	// plainTextPassword, err := gens.GenerateRandomPassword()
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// log.Printf("Generated password: %s", plainTextPassword)
 	tx, err := as.config.DB.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -162,7 +161,7 @@ func (as *AuthService) CreateUser(ctx context.Context, user domain.User) (*dm_sv
 
 	qtx := as.queries.WithTx(tx)
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(plainTextPassword), 12)
+	hash, err := bcrypt.GenerateFromPassword([]byte(user.Password), 12)
 	if err != nil {
 		return nil, err
 	}
@@ -173,6 +172,7 @@ func (as *AuthService) CreateUser(ctx context.Context, user domain.User) (*dm_sv
 		PhoneNumber:  user.PhoneNumber,
 		PasswordHash: hash,
 		RoleID:       user.RoleID,
+		UserName:     user.UserName,
 	})
 	if err != nil {
 		var pgErr *pgconn.PgError

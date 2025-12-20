@@ -1,6 +1,6 @@
 -- name: CreateUser :one
-INSERT INTO users(first_name, last_name, phone_number, password_hash, role_id)
-VALUES($1, $2, $3, $4, $5)
+INSERT INTO users(first_name, last_name, phone_number, password_hash, role_id, user_name)
+VALUES($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: UserProfile :one
@@ -13,7 +13,8 @@ SELECT
   u.created_at,
   u.updated_at,
   r.id AS role_id,
-  r.name AS role_name
+  r.name AS role_name,
+  u.user_name AS user_name
 FROM users u
 JOIN role r ON u.role_id = r.id
 WHERE u.id = $1;
@@ -30,6 +31,12 @@ RETURNING *;
 SELECT *
 FROM users
 WHERE phone_number = $1;
+
+-- name: GetUserByUserName :one
+SELECT *
+FROM users
+WHERE user_name = $1;
+
 
 -- name: GetUsers :many
 SELECT *

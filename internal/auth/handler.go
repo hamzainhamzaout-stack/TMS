@@ -31,7 +31,7 @@ func NewAuthHandler(logger *slog.Logger, service AuthService) *AuthHandler {
 
 func (ah *AuthHandler) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	ah.logger.Info("CreateUserHandler handler started")
-	var userProfileData domain.User
+	var userProfileData domain.UserCreate
 	if err := json.NewDecoder(r.Body).Decode(&userProfileData); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
 		return
@@ -52,6 +52,7 @@ func (ah *AuthHandler) CreateUserHandler(w http.ResponseWriter, r *http.Request)
 		LastName:    user.LastName,
 		PhoneNumber: user.PhoneNumber,
 		RoleID:      user.RoleID,
+		UserName:    user.UserName,
 	}
 
 	responses.SuccessJSONResponse("success", userResponse, http.StatusOK, w)
@@ -228,7 +229,7 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ah *AuthHandler) performLogin(ctx context.Context, userLoginData domain.UserLogin) (string, string, string, error) {
-	return ah.service.Login(ctx, userLoginData.PhoneNumber, userLoginData.Password)
+	return ah.service.Login(ctx, userLoginData.UserName, userLoginData.Password)
 }
 
 func (ah *AuthHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {

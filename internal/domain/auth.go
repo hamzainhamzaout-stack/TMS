@@ -1,16 +1,26 @@
 package domain
 
 type UserLogin struct {
-	PhoneNumber string `json:"phone_number"`
-	Password    string `json:"password"`
+	UserName string `json:"user_name"`
+	Password string `json:"password"`
 }
 
 type User struct {
+	UserName    string `json:"user_name"`
 	FirstName   string `json:"first_name"`
 	LastName    string `json:"last_name"`
 	PhoneNumber string `json:"phone_number"`
-	// Password string `json:"password"`
+	// Password    string `json:"password"`
 	RoleID int32 `json:"role_id"`
+}
+
+type UserCreate struct {
+	UserName    string `json:"user_name"`
+	FirstName   string `json:"first_name"`
+	LastName    string `json:"last_name"`
+	PhoneNumber string `json:"phone_number"`
+	Password    string `json:"password"`
+	RoleID      int32  `json:"role_id"`
 }
 
 type UserUpdateRequest struct {

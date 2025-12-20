@@ -53,6 +53,7 @@ func SeedAdmin(ctx context.Context, cfg config.Config, roleID int32) (uuid.UUID,
 			PhoneNumber:  "09876567890",
 			PasswordHash: hashedPassword,
 			RoleID:       roleID,
+			UserName:     "admin",
 		},
 	)
 

@@ -398,9 +398,9 @@ func (q *Queries) CreateTripExpense(ctx context.Context, arg CreateTripExpensePa
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users(first_name, last_name, phone_number, password_hash, role_id)
-VALUES($1, $2, $3, $4, $5)
-RETURNING id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at
+INSERT INTO users(first_name, last_name, phone_number, password_hash, role_id, user_name)
+VALUES($1, $2, $3, $4, $5, $6)
+RETURNING id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at, user_name
 `
 
 type CreateUserParams struct {
@@ -409,6 +409,7 @@ type CreateUserParams struct {
 	PhoneNumber  string `json:"phone_number"`
 	PasswordHash []byte `json:"password_hash"`
 	RoleID       int32  `json:"role_id"`
+	UserName     string `json:"user_name"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -418,6 +419,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.PhoneNumber,
 		arg.PasswordHash,
 		arg.RoleID,
+		arg.UserName,
 	)
 	var i User
 	err := row.Scan(
@@ -430,6 +432,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserName,
 	)
 	return i, err
 }
@@ -1089,7 +1092,7 @@ func (q *Queries) GetTripsByDriver(ctx context.Context, driverID int32) ([]Trip,
 }
 
 const getUserByPhoneNumber = `-- name: GetUserByPhoneNumber :one
-SELECT id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at
+SELECT id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at, user_name
 FROM users
 WHERE phone_number = $1
 `
@@ -1107,12 +1110,37 @@ func (q *Queries) GetUserByPhoneNumber(ctx context.Context, phoneNumber string) 
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserName,
+	)
+	return i, err
+}
+
+const getUserByUserName = `-- name: GetUserByUserName :one
+SELECT id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at, user_name
+FROM users
+WHERE user_name = $1
+`
+
+func (q *Queries) GetUserByUserName(ctx context.Context, userName string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByUserName, userName)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.FirstName,
+		&i.LastName,
+		&i.PasswordHash,
+		&i.PhoneNumber,
+		&i.RoleID,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.UserName,
 	)
 	return i, err
 }
 
 const getUsers = `-- name: GetUsers :many
-SELECT id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at
+SELECT id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at, user_name
 FROM users
 WHERE status <> 'deleted'
 `
@@ -1136,6 +1164,7 @@ func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UserName,
 		); err != nil {
 			return nil, err
 		}
@@ -1767,7 +1796,7 @@ SET
   phone_number  = COALESCE($4, phone_number),
   updated_at    = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at
+RETURNING id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at, user_name
 `
 
 type UpdateUserParams struct {
@@ -1795,6 +1824,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserName,
 	)
 	return i, err
 }
@@ -1822,7 +1852,7 @@ SET
     last_name = COALESCE($3, last_name)
 WHERE
     id = $1
-RETURNING id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at
+RETURNING id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at, user_name
 `
 
 type UpdateUserProfileParams struct {
@@ -1844,6 +1874,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserName,
 	)
 	return i, err
 }
@@ -1852,7 +1883,7 @@ const updateUserStatus = `-- name: UpdateUserStatus :one
 UPDATE users
 SET status = 'active'
 WHERE id = $1
-RETURNING id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at
+RETURNING id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at, user_name
 `
 
 func (q *Queries) UpdateUserStatus(ctx context.Context, id uuid.UUID) (User, error) {
@@ -1868,6 +1899,7 @@ func (q *Queries) UpdateUserStatus(ctx context.Context, id uuid.UUID) (User, err
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserName,
 	)
 	return i, err
 }
@@ -1882,7 +1914,8 @@ SELECT
   u.created_at,
   u.updated_at,
   r.id AS role_id,
-  r.name AS role_name
+  r.name AS role_name,
+  u.user_name AS user_name
 FROM users u
 JOIN role r ON u.role_id = r.id
 WHERE u.id = $1
@@ -1898,6 +1931,7 @@ type UserProfileRow struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 	RoleID      int32     `json:"role_id"`
 	RoleName    string    `json:"role_name"`
+	UserName    string    `json:"user_name"`
 }
 
 func (q *Queries) UserProfile(ctx context.Context, id uuid.UUID) (UserProfileRow, error) {
@@ -1913,6 +1947,7 @@ func (q *Queries) UserProfile(ctx context.Context, id uuid.UUID) (UserProfileRow
 		&i.UpdatedAt,
 		&i.RoleID,
 		&i.RoleName,
+		&i.UserName,
 	)
 	return i, err
 }
