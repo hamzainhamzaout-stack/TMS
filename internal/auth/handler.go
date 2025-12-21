@@ -238,15 +238,13 @@ func (ah *AuthHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Reques
 		responses.ErrorJSONResponse(fmt.Errorf("error: %v", err), http.StatusBadRequest, w, nil)
 		return
 	}
+	if refreshCookie == nil {
+		responses.ErrorJSONResponse(errors.New("refresh token cookie not found"), http.StatusBadRequest, w, nil)
+		return
+	}
 	refreshToken := refreshCookie.Value
 	if refreshToken == "" {
 		responses.ErrorJSONResponse(fmt.Errorf("error: %v", err), http.StatusBadRequest, w, nil)
-		return
-	}
-
-	if refreshToken == "" {
-		ah.logger.Error("Empty refresh token provided")
-		responses.ErrorJSONResponse(errors.New("error getting the token"), http.StatusBadRequest, w, nil)
 		return
 	}
 
