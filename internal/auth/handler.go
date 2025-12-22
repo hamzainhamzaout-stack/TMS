@@ -238,7 +238,7 @@ func (ah *AuthHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		if err == http.ErrNoCookie {
 			ah.logger.Error("Refresh token cookie not found", "error", err)
-			responses.ErrorJSONResponse(errors.New("refresh token cookie not found"), http.StatusUnauthorized, w, nil)
+			responses.ErrorJSONResponse(errors.New("expired"), http.StatusUnauthorized, w, nil)
 		} else {
 			ah.logger.Error("Failed to get refresh token cookie", "error", err)
 			responses.ErrorJSONResponse(fmt.Errorf("error: %v", err), http.StatusInternalServerError, w, nil)
