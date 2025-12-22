@@ -233,17 +233,21 @@ func (ah *AuthHandler) performLogin(ctx context.Context, userLoginData domain.Us
 }
 
 func (ah *AuthHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
+	ah.logger.Info("Starting Refresh Token")
 	refreshCookie, err := r.Cookie("refreshToken")
 	if err != nil {
-		responses.ErrorJSONResponse(fmt.Errorf("error: %v", err), http.StatusBadRequest, w, nil)
-		return
-	}
-	if refreshCookie == nil {
-		responses.ErrorJSONResponse(errors.New("refresh token cookie not found"), http.StatusBadRequest, w, nil)
+		if err == http.ErrNoCookie {
+			ah.logger.Error("Refresh token cookie not found", "error", err)
+			responses.ErrorJSONResponse(errors.New("refresh token cookie not found"), http.StatusUnauthorized, w, nil)
+		} else {
+			ah.logger.Error("Failed to get refresh token cookie", "error", err)
+			responses.ErrorJSONResponse(fmt.Errorf("error: %v", err), http.StatusInternalServerError, w, nil)
+		}
 		return
 	}
 	refreshToken := refreshCookie.Value
 	if refreshToken == "" {
+		ah.logger.Error("Refresh token is empty", "error", fmt.Errorf("refresh token is empty"))
 		responses.ErrorJSONResponse(fmt.Errorf("error: %v", err), http.StatusUnauthorized, w, nil)
 		return
 	}
