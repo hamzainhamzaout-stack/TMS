@@ -244,7 +244,7 @@ func (ah *AuthHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Reques
 	}
 	refreshToken := refreshCookie.Value
 	if refreshToken == "" {
-		responses.ErrorJSONResponse(fmt.Errorf("error: %v", err), http.StatusBadRequest, w, nil)
+		responses.ErrorJSONResponse(fmt.Errorf("error: %v", err), http.StatusUnauthorized, w, nil)
 		return
 	}
 
