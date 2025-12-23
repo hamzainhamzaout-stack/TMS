@@ -107,6 +107,11 @@ func RunAll(ctx context.Context, cfg config.Config) error {
 		return errors.New("error seeding fleet manager role")
 	}
 
+	_, err = SeedRole(ctx, cfg, "finance_manager")
+	if err != nil {
+		return errors.New("error seeding finance manager role")
+	}
+
 	adminID, err := SeedAdmin(ctx, cfg, *roleID)
 	if err != nil {
 		return errors.New("error seeding admin")
