@@ -14,9 +14,9 @@ import (
 )
 
 type Claims struct {
-	UserID              string              `json:"user_id"`
-	Status              dm_svc_db.UserState    `json:"user_state"`
-	RoleName string `json:"role,omitempty"`
+	UserID   string              `json:"user_id"`
+	Status   dm_svc_db.UserState `json:"user_state"`
+	RoleName string              `json:"role,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -31,14 +31,14 @@ func GenerateTokens(user *dm_svc_db.User, role dm_svc_db.Role) (string, string, 
 
 	// Generate Access Token (15 minutes expiry)
 	accessClaims := &Claims{
-		UserID:              user.ID.String(),
-		Status:              user.Status,
+		UserID:   user.ID.String(),
+		Status:   user.Status,
 		RoleName: role.Name,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(iat),
 			NotBefore: jwt.NewNumericDate(iat),
 			ExpiresAt: jwt.NewNumericDate(iat.Add(15 * time.Minute)),
-			Issuer:    "RMS-Users",
+			Issuer:    "FMS-Users",
 		},
 	}
 
@@ -55,7 +55,7 @@ func GenerateTokens(user *dm_svc_db.User, role dm_svc_db.Role) (string, string, 
 			IssuedAt:  jwt.NewNumericDate(iat),
 			NotBefore: jwt.NewNumericDate(iat),
 			ExpiresAt: jwt.NewNumericDate(iat.Add(24 * time.Hour)),
-			Issuer:    "RMS-Users",
+			Issuer:    "FMS-Users",
 		},
 	}
 
@@ -112,14 +112,14 @@ func GenerateNewAccessToken(refreshToken string, queries *dm_svc_db.Queries, ctx
 	}
 
 	newAccessClaims := &Claims{
-		UserID:              claims.UserID,
-		Status:              claims.Status,
+		UserID:   claims.UserID,
+		Status:   claims.Status,
 		RoleName: role.Name,
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(iat),
 			NotBefore: jwt.NewNumericDate(iat),
 			ExpiresAt: jwt.NewNumericDate(iat.Add(15 * time.Minute)),
-			Issuer:    "RMS-Users",
+			Issuer:    "FMS-Users",
 		},
 	}
 	newAccessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, newAccessClaims)
@@ -134,7 +134,7 @@ func GenerateNewAccessToken(refreshToken string, queries *dm_svc_db.Queries, ctx
 			IssuedAt:  jwt.NewNumericDate(iat),
 			NotBefore: jwt.NewNumericDate(iat),
 			ExpiresAt: jwt.NewNumericDate(iat.Add(24 * time.Hour)),
-			Issuer:    "RMS-Users",
+			Issuer:    "FMS-Users",
 		},
 	}
 	newRefreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, newRefreshClaims)
@@ -188,7 +188,7 @@ func GeneratePasswordResetToken(userID string) (string, error) {
 			IssuedAt:  jwt.NewNumericDate(iat),
 			NotBefore: jwt.NewNumericDate(iat),
 			ExpiresAt: jwt.NewNumericDate(iat.Add(15 * time.Minute)), // Short-lived token
-			Issuer:    "RMS-Users-PasswordReset",
+			Issuer:    "FMS-Users-PasswordReset",
 		},
 	}
 
