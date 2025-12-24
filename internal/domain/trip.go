@@ -17,11 +17,12 @@ type CreateTripParams struct {
 }
 
 type TripExpense struct {
-	TripID    int     `json:"trip_id"`
-	ExpenseID int     `json:"expense_id"`
-	Cost      float64 `json:"cost"`
-	ImageURL  string  `json:"image_url"`
-	Remark    string  `json:"remark"`
+	TripID          int     `json:"trip_id"`
+	ExpenseID       int     `json:"expense_id"`
+	Cost            float64 `json:"cost"`
+	ImageURL        string  `json:"image_url"`
+	Remark          string  `json:"remark"`
+	TransactionDate MyTime  `json:"transaction_date"`
 }
 
 type Transaction struct {

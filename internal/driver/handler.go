@@ -558,11 +558,33 @@ func (h *DriverHandler) CreateTripExpenseHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
+	dateStr := r.FormValue("transaction_date")
+	if dateStr == "" {
+		responses.ErrorJSONResponse(errors.New("transaction_date is required"), http.StatusBadRequest, w, nil)
+		return
+	}
+
+	parsedTime, err := time.Parse("2006-01-02T15:04", dateStr)
+	if err != nil {
+		responses.ErrorJSONResponse(fmt.Errorf("invalid date format: %v", err), http.StatusBadRequest, w, nil)
+		return
+	}
+
+	transactionDate := domain.MyTime(parsedTime)
+
+	remark := r.FormValue("remark")
+	if remark == "" {
+		responses.ErrorJSONResponse(errors.New("remark is required"), http.StatusBadRequest, w, nil)
+		return
+	}
+
 	expenseTrip := domain.TripExpense{
-		TripID:    tripID,
-		ExpenseID: expenseID,
-		Cost:      cost,
-		ImageURL:  receiptURL,
+		TripID:          tripID,
+		ExpenseID:       expenseID,
+		Cost:            cost,
+		ImageURL:        receiptURL,
+		Remark:          remark,
+		TransactionDate: transactionDate,
 	}
 
 	res, err := h.service.CreateTripExpenseService(r.Context(), expenseTrip)
@@ -869,7 +891,7 @@ func (h *DriverHandler) RegisterTripOverhead(w http.ResponseWriter, r *http.Requ
 func (h *DriverHandler) RegisterReturnPayment(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("Registering return payment")
 
-	userID, ok := auth.GetUserIDFromContext(r.Context())
+	userID, ok := r.Context().Value("user_id").(string)
 	if !ok {
 		responses.ErrorJSONResponse(fmt.Errorf("unauthorized action"), http.StatusUnauthorized, w, nil)
 		return
