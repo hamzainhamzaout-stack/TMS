@@ -841,7 +841,9 @@ SELECT
         'expense_name', e.name,
         'cost', te.cost,
         'receipt_url', te.receipt_url,
-        'remark', te.remark
+        'remark', te.remark,
+        'transaction_date', te.transaction_date,
+        'returned_amount', te.returned_amount
       )
     )
     FROM trip_expenses te
