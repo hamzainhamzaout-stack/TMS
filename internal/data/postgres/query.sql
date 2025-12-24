@@ -305,8 +305,8 @@ WHERE
 RETURNING *;
 
 -- name: CreateTripExpense :one
-INSERT INTO trip_expenses(trip_id, expenses_id, cost, receipt_url, remark)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO trip_expenses(trip_id, expenses_id, cost, receipt_url, remark, transaction_date)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: CreateTransaction :one

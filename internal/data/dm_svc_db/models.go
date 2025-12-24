@@ -510,11 +510,12 @@ type Trip struct {
 }
 
 type TripExpense struct {
-	TripID     int32   `json:"trip_id"`
-	ExpensesID int32   `json:"expenses_id"`
-	ReceiptUrl *string `json:"receipt_url"`
-	Remark     *string `json:"remark"`
-	Cost       float64 `json:"cost"`
+	TripID          int32       `json:"trip_id"`
+	ExpensesID      int32       `json:"expenses_id"`
+	ReceiptUrl      *string     `json:"receipt_url"`
+	Remark          *string     `json:"remark"`
+	Cost            float64     `json:"cost"`
+	TransactionDate pgtype.Date `json:"transaction_date"`
 }
 
 type User struct {

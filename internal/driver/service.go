@@ -387,6 +387,10 @@ func (s *DriverService) CreateTripExpenseService(
 		Cost:       tripExpense.Cost, // float64 now matches generated type
 		ReceiptUrl: &tripExpense.ImageURL,
 		Remark:     &tripExpense.Remark,
+		TransactionDate: pgtype.Date{
+			Time:  time.Time(tripExpense.TransactionDate),
+			Valid: true,
+		},
 	})
 }
 

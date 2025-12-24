@@ -365,17 +365,18 @@ func (q *Queries) CreateTrip(ctx context.Context, arg CreateTripParams) (Trip, e
 }
 
 const createTripExpense = `-- name: CreateTripExpense :one
-INSERT INTO trip_expenses(trip_id, expenses_id, cost, receipt_url, remark)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING trip_id, expenses_id, receipt_url, remark, cost
+INSERT INTO trip_expenses(trip_id, expenses_id, cost, receipt_url, remark, transaction_date)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING trip_id, expenses_id, receipt_url, remark, cost, transaction_date
 `
 
 type CreateTripExpenseParams struct {
-	TripID     int32   `json:"trip_id"`
-	ExpensesID int32   `json:"expenses_id"`
-	Cost       float64 `json:"cost"`
-	ReceiptUrl *string `json:"receipt_url"`
-	Remark     *string `json:"remark"`
+	TripID          int32       `json:"trip_id"`
+	ExpensesID      int32       `json:"expenses_id"`
+	Cost            float64     `json:"cost"`
+	ReceiptUrl      *string     `json:"receipt_url"`
+	Remark          *string     `json:"remark"`
+	TransactionDate pgtype.Date `json:"transaction_date"`
 }
 
 func (q *Queries) CreateTripExpense(ctx context.Context, arg CreateTripExpenseParams) (TripExpense, error) {
@@ -385,6 +386,7 @@ func (q *Queries) CreateTripExpense(ctx context.Context, arg CreateTripExpensePa
 		arg.Cost,
 		arg.ReceiptUrl,
 		arg.Remark,
+		arg.TransactionDate,
 	)
 	var i TripExpense
 	err := row.Scan(
@@ -393,6 +395,7 @@ func (q *Queries) CreateTripExpense(ctx context.Context, arg CreateTripExpensePa
 		&i.ReceiptUrl,
 		&i.Remark,
 		&i.Cost,
+		&i.TransactionDate,
 	)
 	return i, err
 }
