@@ -107,7 +107,7 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 	})
 
 	router.Route("/finance", func(financeRoute chi.Router) {
-		// financeRoute.Use(auth.AuthMiddleware)
+		financeRoute.Use(auth.AuthMiddleware)
 		financeRoute.Route("/trip", func(r chi.Router) {
 			r.Get("/", di.DriverHandler.ListTrips)
 			r.Get("/{id}", di.DriverHandler.TripDetail)
