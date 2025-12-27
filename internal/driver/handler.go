@@ -591,6 +591,10 @@ func (h *DriverHandler) CreateTripExpenseHandler(w http.ResponseWriter, r *http.
 
 	res, err := h.service.CreateTripExpenseService(r.Context(), expenseTrip)
 	if err != nil {
+		if err.Error() == "expense for this trip already exists" {
+			responses.ErrorJSONResponse(err, http.StatusConflict, w, nil)
+			return
+		}
 		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
 		return
 	}
