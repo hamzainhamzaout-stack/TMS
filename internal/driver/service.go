@@ -13,6 +13,7 @@ import (
 	"github.com/Robotech-Org/driver-management/internal/domain"
 	"github.com/google/uuid"
 	"github.com/greatcloak/decimal"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -381,7 +382,7 @@ func (s *DriverService) CreateTripExpenseService(
 	tripExpense domain.TripExpense,
 ) (dm_svc_db.TripExpense, error) {
 
-	return s.queries.CreateTripExpense(ctx, dm_svc_db.CreateTripExpenseParams{
+	tripExpenseData, err := s.queries.CreateTripExpense(ctx, dm_svc_db.CreateTripExpenseParams{
 		TripID:     int32(tripExpense.TripID),
 		ExpensesID: int32(tripExpense.ExpenseID),
 		Cost:       tripExpense.Cost, // float64 now matches generated type
@@ -392,6 +393,18 @@ func (s *DriverService) CreateTripExpenseService(
 			Valid: true,
 		},
 	})
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.SQLState() {
+			case "23505":
+				return dm_svc_db.TripExpense{}, errors.New("expense for this trip already exists")
+			}
+		}
+		return dm_svc_db.TripExpense{}, err
+	}
+
+	return tripExpenseData, nil
 }
 
 func (s *DriverService) RegisterAdvancePaymentService(ctx context.Context, transaction domain.Transaction, userID string) (dm_svc_db.Transaction, error) {
