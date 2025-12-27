@@ -891,7 +891,7 @@ func (h *DriverHandler) RegisterTripOverhead(w http.ResponseWriter, r *http.Requ
 func (h *DriverHandler) RegisterReturnPayment(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("Registering return payment")
 
-	userID, ok := r.Context().Value("user_id").(string)
+	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
 		responses.ErrorJSONResponse(fmt.Errorf("unauthorized action"), http.StatusUnauthorized, w, nil)
 		return
