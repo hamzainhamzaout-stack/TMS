@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -515,10 +516,11 @@ func (h *DriverHandler) CreateTripExpenseHandler(w http.ResponseWriter, r *http.
 
 	file, header, err := r.FormFile("receipt")
 	if err != nil {
-		if !errors.Is(err, http.ErrMissingFile) {
-			responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
-			return
-		}
+		// if !errors.Is(err, http.ErrMissingFile) {
+		// 	responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		// 	return
+		// }
+		log.Printf("No receipt uploaded")
 		// No receipt uploaded → proceed without uploading
 	} else {
 		defer file.Close()
@@ -893,6 +895,7 @@ func (h *DriverHandler) RegisterReturnPayment(w http.ResponseWriter, r *http.Req
 
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
+		log.Print("user_id not found in context")
 		responses.ErrorJSONResponse(fmt.Errorf("unauthorized action"), http.StatusUnauthorized, w, nil)
 		return
 	}
