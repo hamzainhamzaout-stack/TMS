@@ -1734,6 +1734,48 @@ func (q *Queries) UpdateTripDriver(ctx context.Context, arg UpdateTripDriverPara
 	return i, err
 }
 
+const updateTripExpense = `-- name: UpdateTripExpense :one
+UPDATE trip_expenses
+SET
+    cost = COALESCE($3, cost),
+    receipt_url = COALESCE($4, receipt_url),
+    remark = COALESCE($5, remark),
+    transaction_date = COALESCE($6, transaction_date),
+    updated_at = NOW()
+WHERE trip_id = $1 AND expenses_id = $2
+RETURNING trip_id, expenses_id, receipt_url, remark, cost, transaction_date
+`
+
+type UpdateTripExpenseParams struct {
+	TripID          int32       `json:"trip_id"`
+	ExpensesID      int32       `json:"expenses_id"`
+	Cost            float64     `json:"cost"`
+	ReceiptUrl      *string     `json:"receipt_url"`
+	Remark          *string     `json:"remark"`
+	TransactionDate pgtype.Date `json:"transaction_date"`
+}
+
+func (q *Queries) UpdateTripExpense(ctx context.Context, arg UpdateTripExpenseParams) (TripExpense, error) {
+	row := q.db.QueryRow(ctx, updateTripExpense,
+		arg.TripID,
+		arg.ExpensesID,
+		arg.Cost,
+		arg.ReceiptUrl,
+		arg.Remark,
+		arg.TransactionDate,
+	)
+	var i TripExpense
+	err := row.Scan(
+		&i.TripID,
+		&i.ExpensesID,
+		&i.ReceiptUrl,
+		&i.Remark,
+		&i.Cost,
+		&i.TransactionDate,
+	)
+	return i, err
+}
+
 const updateTripPaymentState = `-- name: UpdateTripPaymentState :exec
 UPDATE trip
 SET
