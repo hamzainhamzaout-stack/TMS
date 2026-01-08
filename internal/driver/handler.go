@@ -916,3 +916,105 @@ func (h *DriverHandler) RegisterReturnPayment(w http.ResponseWriter, r *http.Req
 	}
 	responses.SuccessJSONResponse("return payment created successfully", payment, http.StatusOK, w)
 }
+
+func (h *DriverHandler) UpdateTripExpense(w http.ResponseWriter, r *http.Request) {
+	tripID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	var receiptURL string
+
+	file, header, err := r.FormFile("receipt")
+	if err != nil {
+		// if !errors.Is(err, http.ErrMissingFile) {
+		// 	responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		// 	return
+		// }
+		log.Printf("No receipt uploaded")
+		// No receipt uploaded → proceed without uploading
+	} else {
+		defer file.Close()
+
+		h.logger.Info("Uploading receipt", "filename", header.Filename, "size", header.Size)
+
+		uploadResult, err := h.cloudinary.Upload.Upload(r.Context(), file, uploader.UploadParams{})
+		if err != nil {
+			responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+			return
+		}
+
+		receiptURL = uploadResult.SecureURL
+	}
+
+	expenseIDStr := r.FormValue("expense_id")
+	if expenseIDStr == "" {
+		responses.ErrorJSONResponse(errors.New("expense_id is required"), http.StatusBadRequest, w, nil)
+		return
+	}
+
+	costStr := r.FormValue("cost")
+	if costStr == "" {
+		responses.ErrorJSONResponse(errors.New("cost is required"), http.StatusBadRequest, w, nil)
+		return
+	}
+
+	cost, err := strconv.ParseFloat(costStr, 64)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	expenseID, err := strconv.Atoi(expenseIDStr)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	dateStr := r.FormValue("transaction_date")
+	if dateStr == "" {
+		responses.ErrorJSONResponse(errors.New("transaction_date is required"), http.StatusBadRequest, w, nil)
+		return
+	}
+
+	parsedTime, err := time.Parse("2006-01-02T15:04", dateStr)
+	if err != nil {
+		responses.ErrorJSONResponse(fmt.Errorf("invalid date format: %v", err), http.StatusBadRequest, w, nil)
+		return
+	}
+
+	transactionDate := domain.MyTime(parsedTime)
+
+	remark := r.FormValue("remark")
+	if remark == "" {
+		responses.ErrorJSONResponse(errors.New("remark is required"), http.StatusBadRequest, w, nil)
+		return
+	}
+
+	expenseTrip := domain.TripExpense{
+		TripID:          tripID,
+		ExpenseID:       expenseID,
+		Cost:            cost,
+		ImageURL:        receiptURL,
+		Remark:          remark,
+		TransactionDate: transactionDate,
+	}
+
+	res, err := h.service.UpdateTripExpense(r.Context(), expenseTrip)
+	if err != nil {
+		if err.Error() == "expense for this trip already exists" {
+			responses.ErrorJSONResponse(err, http.StatusConflict, w, nil)
+			return
+		}
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	responses.SuccessJSONResponse("expense created successfully", res, http.StatusCreated, w)
+}

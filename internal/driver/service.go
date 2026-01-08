@@ -689,3 +689,23 @@ func (s *DriverService) RegisterReturnPaymentService(ctx context.Context, req do
 	}
 	return trip, nil
 }
+
+func (s *DriverService) UpdateTripExpense(ctx context.Context, expense domain.TripExpense) (*dm_svc_db.TripExpense, error) {
+	s.logger.Info("Updating trip expense", "tripID", expense.TripID)
+
+	trip, err := s.queries.UpdateTripExpense(ctx, dm_svc_db.UpdateTripExpenseParams{
+		TripID:     int32(expense.TripID),
+		ExpensesID: int32(expense.ExpenseID),
+		Cost:       expense.Cost,
+		ReceiptUrl: &expense.ImageURL,
+		Remark:     &expense.Remark,
+		TransactionDate: pgtype.Date{
+			Time:  time.Time(expense.TransactionDate),
+			Valid: true,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &trip, nil
+}

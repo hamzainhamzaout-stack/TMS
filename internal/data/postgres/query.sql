@@ -255,6 +255,7 @@ SELECT
   COALESCE(
     (SELECT json_agg(
       json_build_object(
+        'expense_id', te.expenses_id,
         'expense_name', e.name,
         'cost', te.cost,
         'receipt_url', te.receipt_url,
@@ -469,3 +470,15 @@ RETURNING *;
 UPDATE trip
 SET status = $2
 WHERE id = $1;
+
+
+-- name: UpdateTripExpense :one
+UPDATE trip_expenses
+SET
+    cost = COALESCE($3, cost),
+    receipt_url = COALESCE($4, receipt_url),
+    remark = COALESCE($5, remark),
+    transaction_date = COALESCE($6, transaction_date),
+    updated_at = NOW()
+WHERE trip_id = $1 AND expenses_id = $2
+RETURNING *;
