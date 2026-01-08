@@ -367,7 +367,7 @@ func (q *Queries) CreateTrip(ctx context.Context, arg CreateTripParams) (Trip, e
 const createTripExpense = `-- name: CreateTripExpense :one
 INSERT INTO trip_expenses(trip_id, expenses_id, cost, receipt_url, remark, transaction_date)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING trip_id, expenses_id, receipt_url, remark, cost, transaction_date
+RETURNING trip_id, expenses_id, receipt_url, remark, cost, transaction_date, updated_at
 `
 
 type CreateTripExpenseParams struct {
@@ -396,6 +396,7 @@ func (q *Queries) CreateTripExpense(ctx context.Context, arg CreateTripExpensePa
 		&i.Remark,
 		&i.Cost,
 		&i.TransactionDate,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -1744,7 +1745,7 @@ SET
     transaction_date = COALESCE($6, transaction_date),
     updated_at = NOW()
 WHERE trip_id = $1 AND expenses_id = $2
-RETURNING trip_id, expenses_id, receipt_url, remark, cost, transaction_date
+RETURNING trip_id, expenses_id, receipt_url, remark, cost, transaction_date, updated_at
 `
 
 type UpdateTripExpenseParams struct {
@@ -1773,6 +1774,7 @@ func (q *Queries) UpdateTripExpense(ctx context.Context, arg UpdateTripExpensePa
 		&i.Remark,
 		&i.Cost,
 		&i.TransactionDate,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
