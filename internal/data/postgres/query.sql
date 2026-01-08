@@ -255,6 +255,7 @@ SELECT
   COALESCE(
     (SELECT json_agg(
       json_build_object(
+        'expense_id', te.expenses_id,
         'expense_name', e.name,
         'cost', te.cost,
         'receipt_url', te.receipt_url,
