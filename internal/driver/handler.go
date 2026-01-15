@@ -348,11 +348,12 @@ func (h *DriverHandler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 			Valid:      true,
 		},
 	}
-	if err := h.service.CreateTrip(r.Context(), tripData); err != nil {
+	tripID, err := h.service.CreateTrip(r.Context(), tripData)
+	if err != nil {
 		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
 		return
 	}
-	responses.SuccessJSONResponse("created successfully", nil, http.StatusOK, w)
+	responses.SuccessJSONResponse("created successfully", map[string]interface{}{"id": tripID}, http.StatusCreated, w)
 }
 
 func (h *DriverHandler) UpdateTrip(w http.ResponseWriter, r *http.Request) {
@@ -1017,4 +1018,68 @@ func (h *DriverHandler) UpdateTripExpense(w http.ResponseWriter, r *http.Request
 	}
 
 	responses.SuccessJSONResponse("expense created successfully", res, http.StatusCreated, w)
+}
+
+func (h *DriverHandler) UpdateAdvancePayment(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Updating advance payment")
+
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		responses.ErrorJSONResponse(errors.New("authentication required"), http.StatusUnauthorized, w, nil)
+		return
+	}
+
+	transactionIDStr := chi.URLParam(r, "id")
+	id64, err := strconv.ParseInt(transactionIDStr, 10, 32)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	transactionID := int32(id64)
+
+	var req domain.Transaction
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	transaction, err := h.service.UpdateAdvancePaymentService(r.Context(), transactionID, req, userID)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	responses.SuccessJSONResponse("advance payment updated successfully", transaction, http.StatusOK, w)
+}
+
+func (h *DriverHandler) UpdateSettlementPayment(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("Updating settlement payment")
+
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		responses.ErrorJSONResponse(errors.New("authentication required"), http.StatusUnauthorized, w, nil)
+		return
+	}
+
+	transactionIDStr := chi.URLParam(r, "id")
+	id64, err := strconv.ParseInt(transactionIDStr, 10, 32)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+	transactionID := int32(id64)
+
+	var req domain.Transaction
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	transaction, err := h.service.UpdateSettlementPaymentService(r.Context(), transactionID, req, userID)
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	responses.SuccessJSONResponse("settlement payment updated successfully", transaction, http.StatusOK, w)
 }

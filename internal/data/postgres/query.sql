@@ -277,7 +277,11 @@ SELECT
         'payment_method', tr.payment_method,
         'notes', tr.notes,
         'transaction_date', tr.transaction_date,
-        'created_at', tr.created_at
+        'created_at', tr.created_at,
+        'creator', json_build_object(
+          'id', tr.handled_by,
+          'name', tr.handler_name
+        )
       )
     )
     FROM transactions tr
@@ -324,6 +328,20 @@ INSERT INTO transactions (
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8
 ) RETURNING *;
+
+-- name: UpdateTransaction :one
+UPDATE transactions
+SET
+    amount = COALESCE($2, amount),
+    payment_method = COALESCE($3, payment_method),
+    notes = COALESCE($4, notes),
+    transaction_date = COALESCE($5, transaction_date),
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+
+-- name: GetTransaction :one
+SELECT * FROM transactions WHERE id = $1;
 
 -- name: UpdateTripPaymentState :exec
 UPDATE trip
