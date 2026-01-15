@@ -203,7 +203,8 @@ FROM trip;
 -- name: GetTripsByDriver :many
 SELECT *
 FROM trip
-WHERE driver_id = $1;
+WHERE driver_id = $1
+ORDER BY id DESC;
 
 -- name: UpdateTripDriver :one
 UPDATE trip

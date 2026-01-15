@@ -1079,6 +1079,7 @@ const getTripsByDriver = `-- name: GetTripsByDriver :many
 SELECT id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name, client_phone_number, settlement_due_date
 FROM trip
 WHERE driver_id = $1
+ORDER BY id DESC
 `
 
 func (q *Queries) GetTripsByDriver(ctx context.Context, driverID int32) ([]Trip, error) {
