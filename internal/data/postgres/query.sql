@@ -198,7 +198,8 @@ VALUES($1, $2);
 
 -- name: GetTrips :many
 SELECT *
-FROM trip;
+FROM trip
+ORDER BY id DESC;
 
 -- name: GetTripsByDriver :many
 SELECT *
