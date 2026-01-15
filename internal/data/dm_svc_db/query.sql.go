@@ -884,13 +884,15 @@ SELECT
         'notes', tr.notes,
         'transaction_date', tr.transaction_date,
         'created_at', tr.created_at,
+        'receiver_name', tr.handler_name,
         'creator', json_build_object(
           'id', tr.handled_by,
-          'name', tr.handler_name
+          'name', u.first_name || ' ' || u.last_name
         )
       )
     )
     FROM transactions tr
+    JOIN users u ON tr.handled_by = u.id
     WHERE tr.trip_id = t.id AND tr.category IN ('INCOME_DEPOSIT', 'INCOME_FINAL')),
     '[]'::json
   ) AS incomes
