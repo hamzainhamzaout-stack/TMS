@@ -576,10 +576,9 @@ func (h *DriverHandler) CreateTripExpenseHandler(w http.ResponseWriter, r *http.
 	transactionDate := domain.MyTime(parsedTime)
 
 	remark := r.FormValue("remark")
-	// if remark == "" {
-	// 	responses.ErrorJSONResponse(errors.New("remark is required"), http.StatusBadRequest, w, nil)
-	// 	return
-	// }
+	if remark == "" {
+		log.Printf("remark is empty but continue")
+	}
 
 	expenseTrip := domain.TripExpense{
 		TripID:          tripID,
