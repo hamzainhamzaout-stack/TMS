@@ -831,6 +831,28 @@ func (q *Queries) GetRoles(ctx context.Context) ([]Role, error) {
 	return items, nil
 }
 
+const getTransaction = `-- name: GetTransaction :one
+SELECT id, trip_id, amount, category, payment_method, handled_by, handler_name, notes, transaction_date, created_at FROM transactions WHERE id = $1
+`
+
+func (q *Queries) GetTransaction(ctx context.Context, id int32) (Transaction, error) {
+	row := q.db.QueryRow(ctx, getTransaction, id)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.TripID,
+		&i.Amount,
+		&i.Category,
+		&i.PaymentMethod,
+		&i.HandledBy,
+		&i.HandlerName,
+		&i.Notes,
+		&i.TransactionDate,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getTripDetail = `-- name: GetTripDetail :one
 SELECT
   t.id, t.driver_id, t.total_cost, t.receipt_url, t.approved_by, t.isactive, t.created_at, t.updated_at, t.client_name, t.total_quote, t.paid_amount, t.payment_status, t.status, t.origin, t.destination, t.departure_time, t.arrival_time, t.items, t.returned_amount, t.item_weight, t.co_driver_name, t.client_phone_number, t.settlement_due_date,
@@ -861,7 +883,11 @@ SELECT
         'payment_method', tr.payment_method,
         'notes', tr.notes,
         'transaction_date', tr.transaction_date,
-        'created_at', tr.created_at
+        'created_at', tr.created_at,
+        'creator', json_build_object(
+          'id', tr.handled_by,
+          'name', tr.handler_name
+        )
       )
     )
     FROM transactions tr
@@ -1576,6 +1602,50 @@ func (q *Queries) UpdateRole(ctx context.Context, arg UpdateRoleParams) (Role, e
 	row := q.db.QueryRow(ctx, updateRole, arg.ID, arg.Name)
 	var i Role
 	err := row.Scan(&i.ID, &i.Name)
+	return i, err
+}
+
+const updateTransaction = `-- name: UpdateTransaction :one
+UPDATE transactions
+SET
+    amount = COALESCE($2, amount),
+    payment_method = COALESCE($3, payment_method),
+    notes = COALESCE($4, notes),
+    transaction_date = COALESCE($5, transaction_date),
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, trip_id, amount, category, payment_method, handled_by, handler_name, notes, transaction_date, created_at
+`
+
+type UpdateTransactionParams struct {
+	ID              int32            `json:"id"`
+	Amount          float64          `json:"amount"`
+	PaymentMethod   string           `json:"payment_method"`
+	Notes           *string          `json:"notes"`
+	TransactionDate pgtype.Timestamp `json:"transaction_date"`
+}
+
+func (q *Queries) UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error) {
+	row := q.db.QueryRow(ctx, updateTransaction,
+		arg.ID,
+		arg.Amount,
+		arg.PaymentMethod,
+		arg.Notes,
+		arg.TransactionDate,
+	)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.TripID,
+		&i.Amount,
+		&i.Category,
+		&i.PaymentMethod,
+		&i.HandledBy,
+		&i.HandlerName,
+		&i.Notes,
+		&i.TransactionDate,
+		&i.CreatedAt,
+	)
 	return i, err
 }
 

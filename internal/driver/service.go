@@ -267,11 +267,11 @@ func (s *DriverService) ChangeCarDriver(ctx context.Context, driverID int32, car
 	})
 }
 
-func (s *DriverService) CreateTrip(ctx context.Context, trip dm_svc_db.CreateTripParams) error {
+func (s *DriverService) CreateTrip(ctx context.Context, trip dm_svc_db.CreateTripParams) (int32, error) {
 	s.logger.Info("Creating trip", "trip", trip)
 	tripReturning, err := s.queries.CreateTrip(ctx, trip)
 	if err != nil {
-		return fmt.Errorf("failed to create trip: %w", err)
+		return 0, fmt.Errorf("failed to create trip: %w", err)
 	}
 
 	// for _, expense := range trip.ExpenseIDs {
@@ -307,11 +307,11 @@ func (s *DriverService) CreateTrip(ctx context.Context, trip dm_svc_db.CreateTri
 		Notes:       &notes,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create transaction for trip cost: %w", err)
+		return 0, fmt.Errorf("failed to create transaction for trip cost: %w", err)
 	}
 
 	s.logger.Info("Successfully created", "trip", tripReturning)
-	return nil
+	return tripReturning.ID, nil
 }
 
 func (s *DriverService) ListTrips(ctx context.Context) ([]dm_svc_db.Trip, error) {
@@ -514,6 +514,98 @@ func (s *DriverService) RegisterFinalPaymentService(ctx context.Context, transac
 	}
 
 	return txRecord, nil
+}
+
+func (s *DriverService) UpdateAdvancePaymentService(ctx context.Context, transactionID int32, updated domain.Transaction, userID string) (dm_svc_db.Transaction, error) {
+	oldTx, err := s.queries.GetTransaction(ctx, transactionID)
+	if err != nil {
+		return dm_svc_db.Transaction{}, fmt.Errorf("failed to get transaction: %w", err)
+	}
+	if oldTx.Category != dm_svc_db.TransactionCategoryINCOMEDEPOSIT {
+		return dm_svc_db.Transaction{}, fmt.Errorf("transaction is not an advance payment")
+	}
+	oldAmount := oldTx.Amount
+
+	updateParams := dm_svc_db.UpdateTransactionParams{
+		ID:            transactionID,
+		Amount:        updated.Amount,
+		PaymentMethod: updated.Method,
+		Notes:         &updated.Notes,
+		TransactionDate: pgtype.Timestamp{
+			Time:  time.Time(updated.TransactionDate),
+			Valid: true,
+		},
+	}
+	updatedTx, err := s.queries.UpdateTransaction(ctx, updateParams)
+	if err != nil {
+		return dm_svc_db.Transaction{}, fmt.Errorf("failed to update transaction: %w", err)
+	}
+
+	delta := updated.Amount - oldAmount
+
+	if oldTx.TripID == nil {
+		return updatedTx, nil
+	}
+	tripID := *oldTx.TripID
+
+	err = s.queries.UpdateTripPaymentState(ctx, dm_svc_db.UpdateTripPaymentStateParams{
+		ID: tripID,
+		PaidAmount: decimal.NullDecimal{
+			Decimal: decimal.NewFromFloat(delta),
+			Valid:   true,
+		},
+	})
+	if err != nil {
+		return dm_svc_db.Transaction{}, fmt.Errorf("failed to update trip paid amount: %w", err)
+	}
+
+	return updatedTx, nil
+}
+
+func (s *DriverService) UpdateSettlementPaymentService(ctx context.Context, transactionID int32, updated domain.Transaction, userID string) (dm_svc_db.Transaction, error) {
+	oldTx, err := s.queries.GetTransaction(ctx, transactionID)
+	if err != nil {
+		return dm_svc_db.Transaction{}, fmt.Errorf("failed to get transaction: %w", err)
+	}
+	if oldTx.Category != dm_svc_db.TransactionCategoryINCOMEFINAL {
+		return dm_svc_db.Transaction{}, fmt.Errorf("transaction is not a settlement payment")
+	}
+	oldAmount := oldTx.Amount
+
+	updateParams := dm_svc_db.UpdateTransactionParams{
+		ID:            transactionID,
+		Amount:        updated.Amount,
+		PaymentMethod: updated.Method,
+		Notes:         &updated.Notes,
+		TransactionDate: pgtype.Timestamp{
+			Time:  time.Time(updated.TransactionDate),
+			Valid: true,
+		},
+	}
+	updatedTx, err := s.queries.UpdateTransaction(ctx, updateParams)
+	if err != nil {
+		return dm_svc_db.Transaction{}, fmt.Errorf("failed to update transaction: %w", err)
+	}
+
+	delta := updated.Amount - oldAmount
+
+	if oldTx.TripID == nil {
+		return updatedTx, nil
+	}
+	tripID := *oldTx.TripID
+
+	err = s.queries.UpdateTripPaymentState(ctx, dm_svc_db.UpdateTripPaymentStateParams{
+		ID: tripID,
+		PaidAmount: decimal.NullDecimal{
+			Decimal: decimal.NewFromFloat(delta),
+			Valid:   true,
+		},
+	})
+	if err != nil {
+		return dm_svc_db.Transaction{}, fmt.Errorf("failed to update trip paid amount: %w", err)
+	}
+
+	return updatedTx, nil
 }
 
 func (s *DriverService) RegisterMaintenanceService(ctx context.Context, maintenance domain.MaintenanceAddition) (dm_svc_db.MaintenanceLog, error) {

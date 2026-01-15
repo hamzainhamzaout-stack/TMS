@@ -99,7 +99,9 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 		})
 		adminRoute.Route("/income", func(r chi.Router) {
 			r.Post("/advance", di.DriverHandler.RegisterAdvancePayment)
+			r.Patch("/advance/{id}", di.DriverHandler.UpdateAdvancePayment)
 			r.Post("/settlement", di.DriverHandler.RegisterFinalPayment)
+			r.Patch("/settlement/{id}", di.DriverHandler.UpdateSettlementPayment)
 			r.Post("/maintenance", di.DriverHandler.RegisterMaintenance)
 			r.Get("/summary", di.DriverHandler.GetFinancialSummary)
 			r.Get("/trip/{tripId}", di.DriverHandler.GetTripProfitability)
