@@ -337,8 +337,7 @@ SET
     amount = COALESCE($2, amount),
     payment_method = COALESCE($3, payment_method),
     notes = COALESCE($4, notes),
-    transaction_date = COALESCE($5, transaction_date),
-    updated_at = NOW()
+    transaction_date = COALESCE($5, transaction_date)
 WHERE id = $1
 RETURNING *;
 
