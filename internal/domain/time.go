@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-const customLayout = "2006-01-02T15:04"
-
 type MyTime time.Time
 
 func (t *MyTime) UnmarshalJSON(b []byte) error {
@@ -15,7 +13,15 @@ func (t *MyTime) UnmarshalJSON(b []byte) error {
 	if s == "null" || s == "" {
 		return nil
 	}
-	parsed, err := time.Parse(customLayout, s)
+	layouts := []string{"2006-01-02T15:04:05", "2006-01-02T15:04"}
+	var parsed time.Time
+	var err error
+	for _, layout := range layouts {
+		parsed, err = time.Parse(layout, s)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -34,10 +40,10 @@ func (t *MyTime) UnmarshalJSON(b []byte) error {
 // }
 
 func (t MyTime) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf(`"%s"`, time.Time(t).Format(customLayout))), nil
+	return []byte(fmt.Sprintf(`"%s"`, time.Time(t).Format("2006-01-02T15:04"))), nil
 }
 
 // String implements the Stringer interface for easy logging/printing
 func (t MyTime) String() string {
-	return time.Time(t).Format(customLayout)
+	return time.Time(t).Format("2006-01-02T15:04")
 }
