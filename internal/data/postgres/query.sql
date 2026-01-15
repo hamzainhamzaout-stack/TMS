@@ -480,7 +480,8 @@ SET
     client_phone_number = COALESCE($18, client_phone_number),
     updated_at          = NOW(),
     item_weight         = COALESCE($19, item_weight),
-    co_driver_name      = COALESCE($20, co_driver_name)
+    co_driver_name      = COALESCE($20, co_driver_name),
+    settlement_due_date = COALESCE($21, settlement_due_date)
 WHERE id = $1
 RETURNING *;
 
