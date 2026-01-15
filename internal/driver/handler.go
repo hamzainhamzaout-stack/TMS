@@ -389,6 +389,7 @@ func (h *DriverHandler) UpdateTrip(w http.ResponseWriter, r *http.Request) {
 		CoDriverName      string        `json:"co_driver_name"`
 		ClientName        string        `json:"client_name"`
 		ClientPhoneNumber string        `json:"client_phone_number"`
+		SettlementDueDate domain.MyTime `json:"settlement_due_date"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
@@ -417,11 +418,15 @@ func (h *DriverHandler) UpdateTrip(w http.ResponseWriter, r *http.Request) {
 			Valid: true,
 		},
 		Items:             &req.Items,
-		TotalQuote:        NewNullDecimalFromFloat(req.TotalCost),
+		TotalQuote:        NewNullDecimalFromFloat(req.TotalQuote),
 		ItemWeight:        NewNullDecimalFromFloat(req.ItemWeight),
 		CoDriverName:      &req.CoDriverName,
 		ClientName:        &req.ClientName,
 		ClientPhoneNumber: &req.ClientPhoneNumber,
+		SettlementDueDate: pgtype.Date{
+			Time:  time.Time(req.SettlementDueDate),
+			Valid: true,
+		},
 	}
 	trip, err := h.service.UpdateTrip(r.Context(), &tripData)
 	if err != nil {
