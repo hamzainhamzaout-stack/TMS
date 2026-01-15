@@ -1029,6 +1029,7 @@ func (q *Queries) GetTripTransactionDetail(ctx context.Context, tripID *int32) (
 const getTrips = `-- name: GetTrips :many
 SELECT id, driver_id, total_cost, receipt_url, approved_by, isactive, created_at, updated_at, client_name, total_quote, paid_amount, payment_status, status, origin, destination, departure_time, arrival_time, items, returned_amount, item_weight, co_driver_name, client_phone_number, settlement_due_date
 FROM trip
+ORDER BY id DESC
 `
 
 func (q *Queries) GetTrips(ctx context.Context) ([]Trip, error) {
