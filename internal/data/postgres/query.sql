@@ -60,6 +60,11 @@ UPDATE users
 SET password_hash = $1, status='active', updated_at = NOW()
 WHERE id = $2;
 
+-- name: UpdateUserToUninitialized :exec
+UPDATE users
+SET password_hash = $1, status='uninitialized', updated_at = NOW()
+WHERE id = $2;
+
 -- name: BlacklistToken :exec
 INSERT INTO blacklisted_tokens (token) VALUES ($1);
 

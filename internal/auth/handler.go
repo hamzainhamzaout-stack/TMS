@@ -378,6 +378,23 @@ func (ah *AuthHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Reque
 	responses.SuccessJSONResponse("password reset successful", nil, http.StatusOK, w)
 }
 
+func (ah *AuthHandler) AdminResetPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	ah.logger.Info("Admin Reset Password Handler Initiated")
+
+	var req domain.AdminResetPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	if err := ah.service.AdminResetPassword(r.Context(), req); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	responses.SuccessJSONResponse("user password reset successful", nil, http.StatusOK, w)
+}
+
 func (mh *AuthHandler) ProfileHandler(w http.ResponseWriter, r *http.Request) {
 	userID, ok := GetUserIDFromContext(r.Context())
 	if !ok {
