@@ -228,6 +228,57 @@ func (as *AuthService) ResetPasswordService(ctx context.Context, token string, p
 	})
 }
 
+func (as *AuthService) AdminResetPassword(ctx context.Context, req domain.AdminResetPasswordRequest) error {
+	as.logger.Info("Admin reset password service started")
+
+	userUUID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		return err
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.TemporaryPassword), 12)
+	if err != nil {
+		return err
+	}
+
+	tx, err := as.config.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := as.queries.WithTx(tx)
+
+	// Invalidate any existing active OTPs
+	err = qtx.InvalidateActiveOTPsForUser(ctx, userUUID)
+	if err != nil {
+		return err
+	}
+
+	// Update user status to uninitialized and set new password hash
+	err = qtx.UpdateUserToUninitialized(ctx, dm_svc_db.UpdateUserToUninitializedParams{
+		ID:           userUUID,
+		PasswordHash: hash,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Create a new OTP entry with the hashed temporary password
+	deliveryMethod := "admin_reset"
+	_, err = qtx.CreateOTP(ctx, dm_svc_db.CreateOTPParams{
+		UserID:         userUUID,
+		OtpHash:        string(hash),
+		ExpiresAt:      pgtype.Timestamp{Time: time.Now().Add(15 * time.Minute), Valid: true},
+		DeliveryMethod: &deliveryMethod,
+	})
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (as *AuthService) LogoutService(ctx context.Context, refreshToken string) (string, error) {
 	as.logger.Info("LogoutService service started")
 	tx, err := as.config.DB.Begin(ctx)

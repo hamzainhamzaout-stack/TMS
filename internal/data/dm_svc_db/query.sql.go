@@ -2029,6 +2029,22 @@ func (q *Queries) UpdateUserStatus(ctx context.Context, id uuid.UUID) (User, err
 	return i, err
 }
 
+const updateUserToUninitialized = `-- name: UpdateUserToUninitialized :exec
+UPDATE users
+SET password_hash = $1, status='uninitialized', updated_at = NOW()
+WHERE id = $2
+`
+
+type UpdateUserToUninitializedParams struct {
+	PasswordHash []byte    `json:"password_hash"`
+	ID           uuid.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateUserToUninitialized(ctx context.Context, arg UpdateUserToUninitializedParams) error {
+	_, err := q.db.Exec(ctx, updateUserToUninitialized, arg.PasswordHash, arg.ID)
+	return err
+}
+
 const userProfile = `-- name: UserProfile :one
 SELECT
   u.id,
