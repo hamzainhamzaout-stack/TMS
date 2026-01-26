@@ -40,7 +40,7 @@ func SeedRole(ctx context.Context, cfg config.Config, name string) (*int32, erro
 }
 
 func SeedAdmin(ctx context.Context, cfg config.Config, roleID int32) (uuid.UUID, error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("changeme123"), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("abc123"), bcrypt.DefaultCost)
 	if err != nil {
 		return uuid.UUID{}, fmt.Errorf("hash password: %w", err)
 	}
