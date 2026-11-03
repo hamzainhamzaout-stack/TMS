@@ -14,7 +14,7 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 	router := chi.NewRouter()
 
 	cors := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001", "https://erp-system-eta-nine.vercel.app", "https://mahiseid.et", "https://www.mahiseid.et", "https://driver-management-client-staging.up.railway.app"},
+		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001", "https://erp-system-eta-nine.vercel.app", "https://mahiseid.et", "https://www.mahiseid.et", "https://driver-management-client-staging.up.railway.app", "https://driver-management-client-production.up.railway.app/"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
