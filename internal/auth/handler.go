@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -108,11 +107,6 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if clientType == "" {
 		clientType = "web"
 	}
-	environment := os.Getenv("env")
-	if environment == "" {
-		environment = "development"
-	}
-
 	var userLoginData domain.UserLogin
 	if err := json.NewDecoder(r.Body).Decode(&userLoginData); err != nil {
 		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
@@ -127,8 +121,17 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	accessToken, refreshToken, passwordResetToken, err := ah.performLogin(r.Context(), userLoginData)
 	if err != nil {
-		ah.logger.Info("Error", "err", err)
-		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		if errors.Is(err, ErrInvalidCredentials) {
+			ah.logger.Info("Login rejected", "user_name", userLoginData.UserName)
+			responses.ErrorJSONResponse(ErrInvalidCredentials, http.StatusUnauthorized, w, nil)
+			return
+		}
+		if errors.Is(err, ErrUserNotActive) {
+			responses.ErrorJSONResponse(err, http.StatusForbidden, w, nil)
+			return
+		}
+		ah.logger.Error("Login failed", "error", err)
+		responses.ErrorJSONResponse(errors.New("login failed, please try again"), http.StatusInternalServerError, w, nil)
 		return
 	}
 
@@ -148,82 +151,19 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 		responses.SuccessJSONResponse("Successfully authenticated", responseData, http.StatusOK, w)
 	case "web":
-		ah.logger.Info("Handling web client: Setting HttpOnly cookies.")
-		if environment == "development" {
-
-			if passwordResetToken != "" {
-				http.SetCookie(w, &http.Cookie{
-					Name:     "passwordResetToken",
-					Value:    passwordResetToken,
-					Path:     "/",
-					MaxAge:   int(time.Until(time.Now().Add(15 * time.Minute)).Seconds()),
-					HttpOnly: true,
-					Secure:   true,
-					SameSite: http.SameSiteNoneMode,
-				})
-				responses.SuccessJSONResponse("Successfully authenticated", map[string]string{
-					"reset_token": passwordResetToken,
-				}, http.StatusOK, w)
-			} else {
-				http.SetCookie(w, &http.Cookie{
-					Name:     "accessToken",
-					Value:    accessToken,
-					Path:     "/",
-					MaxAge:   int(time.Until(time.Now().Add(15 * time.Minute)).Seconds()),
-					HttpOnly: true,
-					Secure:   true,
-					SameSite: http.SameSiteNoneMode,
-				})
-
-				http.SetCookie(w, &http.Cookie{
-					Name:     "refreshToken",
-					Value:    refreshToken,
-					Path:     "/",
-					MaxAge:   int(time.Until(time.Now().Add(3 * time.Hour)).Seconds()),
-					HttpOnly: true,
-					Secure:   true,
-					SameSite: http.SameSiteNoneMode,
-				})
-				responses.SuccessJSONResponse("Successfully authenticated", nil, http.StatusOK, w)
-			}
-			ah.logger.Info("Cookies set for development environment with SameSite=None")
-
+		if passwordResetToken != "" {
+			setAuthCookie(w, r, "passwordResetToken", passwordResetToken, 15*time.Minute)
+			responses.SuccessJSONResponse("Successfully authenticated", map[string]string{
+				"reset_token": passwordResetToken,
+			}, http.StatusOK, w)
 		} else {
-			if passwordResetToken != "" {
-				http.SetCookie(w, &http.Cookie{
-					Name:     "passwordResetToken",
-					Value:    passwordResetToken,
-					Path:     "/",
-					MaxAge:   int(time.Until(time.Now().Add(15 * time.Minute)).Seconds()),
-					HttpOnly: true,
-					Secure:   r.TLS != nil,
-				})
-				responses.SuccessJSONResponse("Successfully authenticated", map[string]string{
-					"reset_token": passwordResetToken,
-				}, http.StatusOK, w)
-			} else {
-				http.SetCookie(w, &http.Cookie{
-					Name:     "accessToken",
-					Value:    accessToken,
-					Path:     "/",
-					MaxAge:   int(time.Until(time.Now().Add(15 * time.Minute)).Seconds()),
-					HttpOnly: true,
-					Secure:   r.TLS != nil,
-				})
-				http.SetCookie(w, &http.Cookie{
-					Name:     "refreshToken",
-					Value:    refreshToken,
-					Path:     "/",
-					MaxAge:   int(time.Until(time.Now().Add(3 * time.Hour)).Seconds()),
-					HttpOnly: true,
-					Secure:   r.TLS != nil,
-				})
-				responses.SuccessJSONResponse("Successfully authenticated", nil, http.StatusOK, w)
-			}
+			setAuthCookie(w, r, "accessToken", accessToken, 15*time.Minute)
+			setAuthCookie(w, r, "refreshToken", refreshToken, 3*time.Hour)
+			responses.SuccessJSONResponse("Successfully authenticated", nil, http.StatusOK, w)
 		}
 
 	default:
-		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		responses.ErrorJSONResponse(errors.New("unsupported client type"), http.StatusBadRequest, w, nil)
 		return
 	}
 }
@@ -259,71 +199,8 @@ func (ah *AuthHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	environment := os.Getenv("ENV")
-	clearCookie := func(name string) {
-		cookie := &http.Cookie{
-			Name:     name,
-			Value:    "",
-			Path:     "/",
-			MaxAge:   -1,
-			HttpOnly: true,
-		}
-
-		if environment == "development" {
-			cookie.Secure = true
-			cookie.SameSite = http.SameSiteNoneMode
-		} else {
-			cookie.Secure = r.TLS != nil
-		}
-
-		http.SetCookie(w, cookie)
-	}
-
-	clearCookie("accessToken")
-	clearCookie("refreshToken")
-
-	if environment == "development" {
-		http.SetCookie(w, &http.Cookie{
-			Name:     "accessToken",
-			Value:    newToken,
-			Path:     "/",
-			MaxAge:   int(time.Until(time.Now().Add(15 * time.Minute)).Seconds()),
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteNoneMode,
-		})
-
-		http.SetCookie(w, &http.Cookie{
-			Name:     "refreshToken",
-			Value:    newRefreshToken,
-			Path:     "/",
-			MaxAge:   int(time.Until(time.Now().Add(3 * time.Hour)).Seconds()),
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteNoneMode,
-		})
-
-		ah.logger.Info("Cookies set for development environment with SameSite=None")
-	} else {
-
-		http.SetCookie(w, &http.Cookie{
-			Name:     "accessToken",
-			Value:    newToken,
-			Path:     "/",
-			MaxAge:   int(time.Until(time.Now().Add(15 * time.Minute)).Seconds()),
-			HttpOnly: true,
-			Secure:   r.TLS != nil,
-		})
-
-		http.SetCookie(w, &http.Cookie{
-			Name:     "refreshToken",
-			Value:    newRefreshToken,
-			Path:     "/",
-			MaxAge:   int(time.Until(time.Now().Add(3 * time.Hour)).Seconds()),
-			HttpOnly: true,
-			Secure:   r.TLS != nil,
-		})
-	}
+	setAuthCookie(w, r, "accessToken", newToken, 15*time.Minute)
+	setAuthCookie(w, r, "refreshToken", newRefreshToken, 3*time.Hour)
 
 	responses.SuccessJSONResponse("Token refreshed successfully", map[string]string{
 		"access_token": newToken,
@@ -353,27 +230,7 @@ func (ah *AuthHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	environment := os.Getenv("ENV")
-	clearCookie := func(name string) {
-		cookie := &http.Cookie{
-			Name:     name,
-			Value:    "",
-			Path:     "/",
-			MaxAge:   -1,
-			HttpOnly: true,
-		}
-
-		if environment == "development" {
-			cookie.Secure = true
-			cookie.SameSite = http.SameSiteNoneMode
-		} else {
-			cookie.Secure = r.TLS != nil
-		}
-
-		http.SetCookie(w, cookie)
-	}
-
-	clearCookie("passwordResetToken")
+	clearAuthCookie(w, r, "passwordResetToken")
 
 	responses.SuccessJSONResponse("password reset successful", nil, http.StatusOK, w)
 }
@@ -440,28 +297,8 @@ func (ah *AuthHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	environment := os.Getenv("ENV")
-	clearCookie := func(name string) {
-		cookie := &http.Cookie{
-			Name:     name,
-			Value:    "",
-			Path:     "/",
-			MaxAge:   -1,
-			HttpOnly: true,
-		}
-
-		if environment == "development" {
-			cookie.Secure = true
-			cookie.SameSite = http.SameSiteNoneMode
-		} else {
-			cookie.Secure = r.TLS != nil
-		}
-
-		http.SetCookie(w, cookie)
-	}
-
-	clearCookie("accessToken")
-	clearCookie("refreshToken")
+	clearAuthCookie(w, r, "accessToken")
+	clearAuthCookie(w, r, "refreshToken")
 
 	responses.SuccessJSONResponse("Logout successful", map[string]string{
 		"message": logoutMessage,

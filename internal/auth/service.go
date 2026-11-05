@@ -13,6 +13,7 @@ import (
 	"github.com/Robotech-Org/driver-management/internal/domain"
 	"github.com/Robotech-Org/driver-management/utils/tokenGen"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
@@ -38,14 +39,19 @@ func (as *AuthService) Login(ctx context.Context, userName, plainTextPassword st
 
 	user, err := as.queries.GetUserByUserName(ctx, userName)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", "", "", ErrInvalidCredentials
+		}
 		return "", "", "", err
 	}
-	log.Printf("User: %v", user)
 
 	switch user.Status {
 	case "uninitialized":
 		userID, err := as.ValidateOTPService(ctx, userName, plainTextPassword)
 		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+				return "", "", "", ErrInvalidCredentials
+			}
 			return "", "", "", err
 		}
 
@@ -58,9 +64,8 @@ func (as *AuthService) Login(ctx context.Context, userName, plainTextPassword st
 
 	case "active":
 		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(plainTextPassword)); err != nil {
-			return "", "", "", fmt.Errorf("invalid credentials")
+			return "", "", "", ErrInvalidCredentials
 		}
-		log.Printf("User: %v", user)
 
 		roles, err := as.queries.GetMyRole(ctx, user.ID)
 		if err != nil {
@@ -73,10 +78,10 @@ func (as *AuthService) Login(ctx context.Context, userName, plainTextPassword st
 		}
 
 	case "inactive":
-		return "", "", "", fmt.Errorf("user is inactive")
+		return "", "", "", fmt.Errorf("%w: user is inactive", ErrUserNotActive)
 
 	case "deleted":
-		return "", "", "", fmt.Errorf("user is deleted")
+		return "", "", "", ErrInvalidCredentials
 
 	default:
 		return "", "", "", fmt.Errorf("invalid user status")
@@ -117,7 +122,6 @@ func (as *AuthService) ValidateOTPService(ctx context.Context, userName string, 
 		log.Printf("Error when getting OTP for user id: %v", user.ID)
 		return "", err
 	}
-	log.Printf("OTP found in the db: %v", otp)
 
 	if err := bcrypt.CompareHashAndPassword([]byte(otp.OtpHash), []byte(userOTP)); err != nil {
 		log.Println("Couldn't compare users otp and otp hash from the database")
@@ -437,3 +441,11 @@ func (s *AuthService) DeleteUserService(ctx context.Context, userID string) erro
 
 	return nil
 }
+
+var (
+	// ErrInvalidCredentials is returned for an unknown user name or a wrong
+	// password/OTP. The two cases share one error so the response does not
+	// reveal which user names exist.
+	ErrInvalidCredentials = errors.New("invalid username or password")
+	ErrUserNotActive      = errors.New("account is not active")
+)
