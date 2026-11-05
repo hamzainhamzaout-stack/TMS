@@ -37,6 +37,10 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 	fs := http.FileServer(http.Dir("./docs/swagger-ui"))
 	router.Handle("/swagger/*", http.StripPrefix("/swagger/", fs))
 
+	// Traccar Client posts driver positions here; the device token is the credential.
+	router.Get("/track", di.TrackingHandler.Ingest)
+	router.Post("/track", di.TrackingHandler.Ingest)
+
 	router.Group(func(r chi.Router) {
 		r.Post("/login", di.AuthHandler.Login)
 		r.Post("/refresh", di.AuthHandler.RefreshTokenHandler)
@@ -76,6 +80,13 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 			r.Delete("/{id}", di.DriverHandler.DeleteDriver)
 			r.Post("/{id}/payroll", di.DriverHandler.AddPayroll)
 			r.Get("/{id}/payroll", di.DriverHandler.GetDriverLedger)
+			r.Group(func(r chi.Router) {
+				r.Use(auth.RequireRole("admin", "fleet_manager"))
+				r.Get("/{id}/tracking", di.TrackingHandler.TrackingStatus)
+				r.Post("/{id}/tracking", di.TrackingHandler.EnableTracking)
+				r.Delete("/{id}/tracking", di.TrackingHandler.DisableTracking)
+				r.Get("/{id}/locations", di.TrackingHandler.DriverLocations)
+			})
 		})
 		adminRoute.Route("/cars", func(r chi.Router) {
 			r.Get("/", di.DriverHandler.ListCars)
@@ -90,7 +101,9 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 			r.Get("/{id}", di.DriverHandler.TripDetail)
 			r.Patch("/{id}", di.DriverHandler.UpdateTrip)
 			r.Delete("/{id}", di.DriverHandler.DeleteTrip)
+			r.With(auth.RequireRole("admin", "fleet_manager")).Get("/{id}/locations", di.TrackingHandler.TripLocations)
 		})
+		adminRoute.With(auth.RequireRole("admin", "fleet_manager")).Get("/tracking/live", di.TrackingHandler.LivePositions)
 		adminRoute.Route("/expense-type", func(r chi.Router) {
 			r.Get("/", di.DriverHandler.GetExpenseTypes)
 			r.Post("/", di.DriverHandler.CreateExpense)
