@@ -437,6 +437,23 @@ type DriverLedger struct {
 	CreatedAt     pgtype.Timestamp `json:"created_at"`
 }
 
+type DriverLocation struct {
+	ID         int64              `json:"id"`
+	DriverID   int32              `json:"driver_id"`
+	DeviceID   int32              `json:"device_id"`
+	TripID     *int32             `json:"trip_id"`
+	Latitude   float64            `json:"latitude"`
+	Longitude  float64            `json:"longitude"`
+	SpeedKmh   *float32           `json:"speed_kmh"`
+	Heading    *float32           `json:"heading"`
+	AltitudeM  *float32           `json:"altitude_m"`
+	AccuracyM  *float32           `json:"accuracy_m"`
+	BatteryPct *float32           `json:"battery_pct"`
+	IsMoving   *bool              `json:"is_moving"`
+	RecordedAt pgtype.Timestamptz `json:"recorded_at"`
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
+}
+
 type Expense struct {
 	ID   int32  `json:"id"`
 	Name string `json:"name"`
@@ -468,6 +485,16 @@ type Otp struct {
 type Role struct {
 	ID   int32  `json:"id"`
 	Name string `json:"name"`
+}
+
+type TrackingDevice struct {
+	ID         int32              `json:"id"`
+	DriverID   int32              `json:"driver_id"`
+	TokenHash  string             `json:"token_hash"`
+	CreatedBy  pgtype.UUID        `json:"created_by"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	LastSeenAt pgtype.Timestamptz `json:"last_seen_at"`
+	RevokedAt  pgtype.Timestamptz `json:"revoked_at"`
 }
 
 type Transaction struct {
