@@ -39,6 +39,11 @@ type UpdateUserRequest struct {
 	LastName  *string `json:"last_name"`
 }
 
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
 type AdminResetPasswordRequest struct {
 	UserID            string `json:"user_id"`
 	TemporaryPassword string `json:"temporary_password"`

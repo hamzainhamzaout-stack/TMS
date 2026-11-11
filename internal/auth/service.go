@@ -232,6 +232,40 @@ func (as *AuthService) ResetPasswordService(ctx context.Context, token string, p
 	})
 }
 
+// ChangePassword lets a logged-in user replace their own password after
+// proving they know the current one.
+func (as *AuthService) ChangePassword(ctx context.Context, userID string, req domain.ChangePasswordRequest) error {
+	as.logger.Info("Change password service started")
+
+	if len(req.NewPassword) < MinPasswordLength {
+		return ErrPasswordTooShort
+	}
+
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return err
+	}
+
+	user, err := as.queries.GetUserByID(ctx, userUUID)
+	if err != nil {
+		return err
+	}
+
+	if err := bcrypt.CompareHashAndPassword(user.PasswordHash, []byte(req.CurrentPassword)); err != nil {
+		return ErrWrongCurrentPassword
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 12)
+	if err != nil {
+		return err
+	}
+
+	return as.queries.UpdateUserPassword(ctx, dm_svc_db.UpdateUserPasswordParams{
+		ID:           userUUID,
+		PasswordHash: hash,
+	})
+}
+
 func (as *AuthService) AdminResetPassword(ctx context.Context, req domain.AdminResetPasswordRequest) error {
 	as.logger.Info("Admin reset password service started")
 
@@ -448,4 +482,9 @@ var (
 	// reveal which user names exist.
 	ErrInvalidCredentials = errors.New("invalid username or password")
 	ErrUserNotActive      = errors.New("account is not active")
+
+	ErrWrongCurrentPassword = errors.New("current password is incorrect")
+	ErrPasswordTooShort     = fmt.Errorf("password must be at least %d characters", MinPasswordLength)
 )
+
+const MinPasswordLength = 8

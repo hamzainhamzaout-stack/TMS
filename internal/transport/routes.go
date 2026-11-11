@@ -51,6 +51,7 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 		r.Use(auth.AuthMiddleware)
 		r.Get("/me", di.AuthHandler.ProfileHandler)
 		r.Patch("/me", di.AuthHandler.UpdateProfileHandler)
+		r.Post("/me/password", di.AuthHandler.ChangePasswordHandler)
 		r.Post("/logout", di.AuthHandler.LogoutHandler)
 		r.Post("/account/set_password", di.AuthHandler.ResetPasswordHandler)
 	})

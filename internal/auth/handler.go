@@ -235,6 +235,35 @@ func (ah *AuthHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Reque
 	responses.SuccessJSONResponse("password reset successful", nil, http.StatusOK, w)
 }
 
+func (ah *AuthHandler) ChangePasswordHandler(w http.ResponseWriter, r *http.Request) {
+	ah.logger.Info("Change Password Handler Initiated")
+
+	userID, ok := GetUserIDFromContext(r.Context())
+	if !ok {
+		responses.ErrorJSONResponse(errors.New("user_id not found in context"), http.StatusUnauthorized, w, nil)
+		return
+	}
+
+	var req domain.ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	if err := ah.service.ChangePassword(r.Context(), userID, req); err != nil {
+		switch {
+		case errors.Is(err, ErrWrongCurrentPassword), errors.Is(err, ErrPasswordTooShort):
+			responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		default:
+			ah.logger.Error("Change password failed", "error", err)
+			responses.ErrorJSONResponse(errors.New("failed to change password"), http.StatusInternalServerError, w, nil)
+		}
+		return
+	}
+
+	responses.SuccessJSONResponse("password changed successfully", nil, http.StatusOK, w)
+}
+
 func (ah *AuthHandler) AdminResetPasswordHandler(w http.ResponseWriter, r *http.Request) {
 	ah.logger.Info("Admin Reset Password Handler Initiated")
 
