@@ -32,6 +32,11 @@ SELECT *
 FROM users
 WHERE phone_number = $1;
 
+-- name: GetUserByID :one
+SELECT *
+FROM users
+WHERE id = $1;
+
 -- name: GetUserByUserName :one
 SELECT *
 FROM users

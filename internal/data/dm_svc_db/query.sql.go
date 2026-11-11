@@ -1127,6 +1127,30 @@ func (q *Queries) GetTripsByDriver(ctx context.Context, driverID int32) ([]Trip,
 	return items, nil
 }
 
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at, user_name
+FROM users
+WHERE id = $1
+`
+
+func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.FirstName,
+		&i.LastName,
+		&i.PasswordHash,
+		&i.PhoneNumber,
+		&i.RoleID,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.UserName,
+	)
+	return i, err
+}
+
 const getUserByPhoneNumber = `-- name: GetUserByPhoneNumber :one
 SELECT id, first_name, last_name, password_hash, phone_number, role_id, status, created_at, updated_at, user_name
 FROM users
