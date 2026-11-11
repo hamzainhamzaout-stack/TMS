@@ -102,7 +102,12 @@ func UpdateAdminStatus(ctx context.Context, cfg config.Config, userID uuid.UUID)
 }
 
 func RunAll(ctx context.Context, cfg config.Config) error {
-	roleID, err := SeedRole(ctx, cfg, "fleet_manager")
+	adminRoleID, err := SeedRole(ctx, cfg, "admin")
+	if err != nil {
+		return errors.New("error seeding admin role")
+	}
+
+	_, err = SeedRole(ctx, cfg, "fleet_manager")
 	if err != nil {
 		return errors.New("error seeding fleet manager role")
 	}
@@ -112,7 +117,7 @@ func RunAll(ctx context.Context, cfg config.Config) error {
 		return errors.New("error seeding finance manager role")
 	}
 
-	adminID, err := SeedAdmin(ctx, cfg, *roleID)
+	adminID, err := SeedAdmin(ctx, cfg, *adminRoleID)
 	if err != nil {
 		return errors.New("error seeding admin")
 	}
