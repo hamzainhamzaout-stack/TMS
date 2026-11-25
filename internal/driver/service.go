@@ -257,7 +257,7 @@ func (s *DriverService) UpdateCarStatus(ctx context.Context, carID int32, carSta
 func (s *DriverService) DeleteCar(ctx context.Context, carID int32) error {
 	s.logger.Info("Deleting car", "carID", carID)
 	return s.queries.DeleteCar(ctx, carID)
-}
+}//<your-app>.up.railway.app/swagger/ 
 
 func (s *DriverService) ChangeCarDriver(ctx context.Context, driverID int32, carID int32) error {
 	s.logger.Info("Changing car driver", "driverID", driverID)
