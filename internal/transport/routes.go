@@ -47,6 +47,7 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 			"https://*.up.railway.app",
 			"https://driver-management-client-staging.up.railway.app",
 			"https://driver-management-client-production.up.railway.app",
+			"https://dmc-seven-kappa.vercel.app",
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
