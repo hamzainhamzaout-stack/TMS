@@ -2,6 +2,8 @@ package transport
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/Robotech-Org/driver-management/internal/auth"
 	"github.com/Robotech-Org/driver-management/internal/wiring"
@@ -10,11 +12,42 @@ import (
 	"github.com/go-chi/cors"
 )
 
+func findDocsDir() string {
+	candidates := []string{
+		"./docs",
+		"../docs",
+		"../../docs",
+	}
+	for _, c := range candidates {
+		if fi, err := os.Stat(c); err == nil && fi.IsDir() {
+			return c
+		}
+	}
+	if exe, err := os.Executable(); err == nil {
+		exeDocs := filepath.Join(filepath.Dir(exe), "docs")
+		if fi, err := os.Stat(exeDocs); err == nil && fi.IsDir() {
+			return exeDocs
+		}
+	}
+	return "./docs"
+}
+
 func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 	router := chi.NewRouter()
 
 	cors := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001", "https://erp-system-eta-nine.vercel.app", "https://mahiseid.et", "https://www.mahiseid.et", "https://driver-management-client-staging.up.railway.app", "https://driver-management-client-production.up.railway.app"},
+		AllowedOrigins: []string{
+			"http://localhost:*",
+			"https://localhost:*",
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"https://erp-system-eta-nine.vercel.app",
+			"https://mahiseid.et",
+			"https://www.mahiseid.et",
+			"https://*.up.railway.app",
+			"https://driver-management-client-staging.up.railway.app",
+			"https://driver-management-client-production.up.railway.app",
+		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -29,13 +62,32 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 		responses.SuccessJSONResponse(message, nil, http.StatusOK, w)
 	})
 
-	router.Get("/swagger.yaml", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./docs/swagger.yaml")
-	})
+	docsDir := findDocsDir()
+	serveSwaggerYaml := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+		http.ServeFile(w, r, filepath.Join(docsDir, "swagger.yaml"))
+	}
+
+	router.Get("/swagger.yaml", serveSwaggerYaml)
+	router.Get("/swagger/swagger.yaml", serveSwaggerYaml)
 
 	// Serve the Swagger UI
-	fs := http.FileServer(http.Dir("./docs/swagger-ui"))
+	fs := http.FileServer(http.Dir(filepath.Join(docsDir, "swagger-ui")))
 	router.Handle("/swagger/*", http.StripPrefix("/swagger/", fs))
+
+	// Documentation convenience redirects
+	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/swagger/", http.StatusFound)
+	})
+	router.Get("/swagger", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/swagger/", http.StatusMovedPermanently)
+	})
+	router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/swagger/", http.StatusMovedPermanently)
+	})
+	router.Get("/docs/*", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/swagger/", http.StatusMovedPermanently)
+	})
 
 	// Traccar Client posts driver positions here; the device token is the credential.
 	router.Get("/track", di.TrackingHandler.Ingest)

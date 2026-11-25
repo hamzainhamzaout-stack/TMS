@@ -33,9 +33,12 @@ func main() {
 		panic("DM_DB_DSN not set")
 	}
 
-	serverPort := os.Getenv("DM_SERVER_PORT")
+	serverPort := os.Getenv("PORT")
 	if serverPort == "" {
-		panic("DM_SERVER_PORT not set")
+		serverPort = os.Getenv("DM_SERVER_PORT")
+	}
+	if serverPort == "" {
+		serverPort = "8091"
 	}
 
 	secretKey := os.Getenv("SECRET_KEY")

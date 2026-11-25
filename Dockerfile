@@ -22,9 +22,8 @@ COPY --from=builder /app/driver-mgmt-svc .
 COPY --from=builder /app/migrations ./migrations
 
 COPY --from=builder /app/docs ./docs
-COPY --from=builder /app/docs/swagger-ui ./docs/swagger-ui
 
-EXPOSE 8000
+EXPOSE 8091
 
 CMD ["sh", "-c", "goose -dir ./migrations up && ./driver-mgmt-svc"]
 
