@@ -1,42 +1,225 @@
 swagger: "2.0"
 info:
   title: "Driver Management API"
-  description: "API for managing drivers, cars, and trips."
+  description: |
+    API for managing users, drivers, cars, trips, finances, and GPS tracking.
+
+    ## Authentication (read first)
+    Auth is **cookie-based only**. The server never reads an `Authorization` header.
+
+    - **Web / this page:** call `POST /login`. The browser stores the HttpOnly `accessToken`
+      (15 min) and `refreshToken` (3 h) cookies and sends them automatically. Web clients must
+      send requests with credentials (`fetch(..., {credentials: "include"})` / axios `withCredentials: true`).
+      When the access token expires (401), call `POST /refresh`, then retry.
+    - **Mobile / non-browser clients:** call `POST /login` with header `X-Client-Type: mobile`.
+      Tokens come back in `data.access_token` / `data.refresh_token`. Send them on later requests
+      as a cookie header: `Cookie: accessToken=<access_token>` (and `Cookie: refreshToken=<refresh_token>` for `/refresh` and `/logout`).
+
+    ## Response envelope
+    Success: `{"message": string, "status_code": int, "data": any}` (`data` omitted when empty).
+    Error: `{"message": string, "status_code": int}`.
+    **Empty lists may come back as `null` instead of `[]`** (e.g. `data: null`, `data.drivers: null`). Treat `null` as an empty list.
+
+    ## Data format rules (important for clients)
+    - **Money/decimal fields marked `format: decimal` are JSON strings** (e.g. `"1200.5"`), or `null`. Parse them; do not do arithmetic on the raw value.
+    - **Timestamps without timezone** look like `2026-11-25T10:30:00` (no `Z`). Fields marked `format: date-time` include a timezone (`2026-11-25T10:30:00Z`).
+    - **Request datetimes** (trip times, `settlement_due_date`, `transaction_date`) must be `YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS`, **without timezone**. Sending `...Z` or a plain date returns 400.
+    - Trip `status` and `payment_status` are returned as objects: `{"trip_status": "CONFIRMED", "valid": true}`.
   version: "1.0.0"
 basePath: "/"
+securityDefinitions:
+  CookieAuth:
+    type: "apiKey"
+    name: "Cookie"
+    in: "header"
+    description: |
+      Swagger 2.0 cannot model cookie auth directly. In this page, just call `POST /login` first:
+      the browser then sends the `accessToken` cookie automatically (the Authorize button is not needed).
+      Non-browser clients send the header `Cookie: accessToken=<token>`.
+responses:
+  Unauthorized:
+    description: "Missing, invalid or expired `accessToken` cookie"
+    schema:
+      $ref: "#/definitions/ErrorResponse"
+  Forbidden:
+    description: "Authenticated, but the user's role is not allowed (message: `forbidden`)"
+    schema:
+      $ref: "#/definitions/ErrorResponse"
+  BadRequest:
+    description: "Invalid path parameter, query parameter or request body"
+    schema:
+      $ref: "#/definitions/ErrorResponse"
+  InternalError:
+    description: "Server or database error"
+    schema:
+      $ref: "#/definitions/ErrorResponse"
+tags:
+  - name: "Health"
+  - name: "Auth"
+  - name: "Account"
+  - name: "Admin - Users"
+  - name: "Admin - Roles"
+  - name: "Admin - Drivers"
+  - name: "Admin - Cars"
+  - name: "Admin - Trips"
+  - name: "Admin - Expense Types"
+  - name: "Admin - Stats"
+  - name: "Admin - Income"
+  - name: "Finance"
+  - name: "Tracking"
+
 paths:
   /health:
     get:
+      tags: ["Health"]
       summary: "Health check"
+      produces:
+        - "application/json"
       responses:
         "200":
           description: "OK"
+          schema:
+            $ref: "#/definitions/SuccessResponse"
+
   /login:
     post:
+      tags: ["Auth"]
       summary: "User login"
+      description: "Authenticates user. Web clients receive HttpOnly cookies; set `X-Client-Type: mobile` to receive tokens in JSON `data`."
       consumes:
         - "application/json"
       produces:
         - "application/json"
       parameters:
+        - in: "header"
+          name: "X-Client-Type"
+          type: "string"
+          enum: ["web", "mobile"]
+          default: "web"
+          required: false
         - in: "body"
           name: "body"
-          description: "User login data"
+          description: "User login credentials"
           required: true
           schema:
             $ref: "#/definitions/UserLogin"
       responses:
         "200":
-          description: "Successful login"
+          description: |
+            Successful login. What `data` contains depends on the client type and the user's state:
+            - **web, normal user:** no `data`; `accessToken` + `refreshToken` cookies are set.
+            - **web, user must set a password (first login / admin reset):** `data.reset_token`, and a 15-min `passwordResetToken` cookie is set. Next call `POST /user/password`.
+            - **mobile, normal user:** `data.access_token` + `data.refresh_token` (no cookies).
+            - **mobile, must set a password:** `data.reset_token` only.
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/LoginData"
+        "400":
+          description: "Invalid JSON, missing fields (`validation error occurred`), or `X-Client-Type` not `web`/`mobile` (`unsupported client type`)"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "401":
+          description: "Invalid credentials"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "403":
+          description: "User not active"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /refresh:
+    post:
+      tags: ["Auth"]
+      summary: "Refresh access token"
+      description: "Reads the `refreshToken` cookie and sets new `accessToken` and `refreshToken` cookies (the refresh token rotates). Mobile clients send `Cookie: refreshToken=<token>`; note the new refresh token is only returned as a cookie (`Set-Cookie`), not in the body."
+      produces:
+        - "application/json"
+      responses:
+        "200":
+          description: "Token refreshed successfully"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "object"
+                    properties:
+                      access_token:
+                        type: "string"
+        "401":
+          description: "Missing, empty, or invalid refresh token (log in again)"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "500":
+          $ref: "#/responses/InternalError"
+
   /logout:
     post:
+      tags: ["Auth"]
       summary: "User logout"
+      description: "Requires both the `accessToken` cookie (auth) and the `refreshToken` cookie (the token to revoke). Clears both cookies."
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
       responses:
         "200":
           description: "Successful logout"
-  /admin/user:
-    post:
-      summary: "Create a new user"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "object"
+                    properties:
+                      message:
+                        type: "string"
+        "400":
+          description: "Missing or empty refreshToken cookie"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /me:
+    get:
+      tags: ["Account"]
+      summary: "Get current user profile"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
+      responses:
+        "200":
+          description: "User profile retrieved"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/UserProfile"
+        "401":
+          description: "Unauthorized"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "500":
+          $ref: "#/responses/InternalError"
+    patch:
+      tags: ["Account"]
+      summary: "Update current user profile"
+      security:
+        - CookieAuth: []
       consumes:
         - "application/json"
       produces:
@@ -44,27 +227,333 @@ paths:
       parameters:
         - in: "body"
           name: "body"
-          description: "User data"
           required: true
           schema:
-            $ref: "#/definitions/User"
+            $ref: "#/definitions/UpdateProfileRequest"
       responses:
-        "201":
+        "200":
+          description: "Profile updated"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "object"
+                    properties:
+                      message:
+                        type: "string"
+                      first_name:
+                        type: "string"
+                      last_name:
+                        type: "string"
+                      phone_number:
+                        type: "string"
+                      status:
+                        type: "string"
+                        enum: ["uninitialized", "active", "unactive", "deleted"]
+        "400":
+          description: "Invalid request"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /me/password:
+    post:
+      tags: ["Account"]
+      summary: "Change current user password"
+      security:
+        - CookieAuth: []
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/ChangePasswordRequest"
+      responses:
+        "200":
+          description: "Password changed successfully"
+          schema:
+            $ref: "#/definitions/SuccessResponse"
+        "400":
+          description: "Invalid input, wrong current password, or password too short"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "401":
+          description: "Unauthorized"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /account/set_password:
+    post:
+      tags: ["Account"]
+      summary: "Set password using reset cookie (authenticated)"
+      description: "Same as `POST /user/password`, but also requires a valid `accessToken` cookie. A user in the first-login / reset flow has no access token yet, so **frontends should use `POST /user/password`** for that flow."
+      security:
+        - CookieAuth: []
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/PasswordResetBody"
+      responses:
+        "200":
+          description: "Password reset successful"
+          schema:
+            $ref: "#/definitions/SuccessResponse"
+        "400":
+          description: "Missing reset cookie or invalid body"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /user/password:
+    post:
+      tags: ["Account"]
+      summary: "Set a new password using the reset cookie (first login / after admin reset)"
+      description: "Public endpoint. Reads the `passwordResetToken` cookie set by `POST /login` (valid 15 min), sets the new password and clears the cookie. Mobile clients send `Cookie: passwordResetToken=<reset_token>`. After success, log in again with the new password."
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - in: "body"
+          name: "body"
+          description: "Password reset data"
+          required: true
+          schema:
+            $ref: "#/definitions/PasswordResetBody"
+      responses:
+        "200":
+          description: "Password reset successful"
+          schema:
+            $ref: "#/definitions/SuccessResponse"
+        "400":
+          description: "Missing reset cookie or invalid body"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/user:
+    post:
+      tags: ["Admin - Users"]
+      summary: "Create a new user (admin only)"
+      security:
+        - CookieAuth: []
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - in: "body"
+          name: "body"
+          description: "User creation payload"
+          required: true
+          schema:
+            $ref: "#/definitions/UserCreate"
+      responses:
+        "200":
           description: "User created"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/User"
+        "400":
+          description: "Invalid request"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "409":
+          description: "A user with this phone number already exists"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "403":
+          $ref: "#/responses/Forbidden"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/user/list:
+    get:
+      tags: ["Admin - Users"]
+      summary: "List all users (admin only)"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
+      responses:
+        "200":
+          description: "Users retrieved successfully"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "array"
+                    items:
+                      $ref: "#/definitions/UserRecord"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "403":
+          $ref: "#/responses/Forbidden"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/user/{id}:
+    patch:
+      tags: ["Admin - Users"]
+      summary: "Update a user (admin only)"
+      security:
+        - CookieAuth: []
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "string"
+          format: "uuid"
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/UserUpdateRequest"
+      responses:
+        "200":
+          description: "User updated. Note: `user_name` is returned as an empty string by this endpoint."
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/User"
+        "400":
+          description: "Invalid JSON body"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "403":
+          $ref: "#/responses/Forbidden"
+        "500":
+          $ref: "#/responses/InternalError"
+    delete:
+      tags: ["Admin - Users"]
+      summary: "Delete a user (admin only)"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "string"
+          format: "uuid"
+      responses:
+        "200":
+          description: "User deleted"
+          schema:
+            $ref: "#/definitions/SuccessResponse"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "403":
+          $ref: "#/responses/Forbidden"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/user/reset-password:
+    post:
+      tags: ["Admin - Users"]
+      summary: "Admin reset user password (admin only)"
+      security:
+        - CookieAuth: []
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/AdminResetPasswordRequest"
+      responses:
+        "200":
+          description: "User password reset successful"
+          schema:
+            $ref: "#/definitions/SuccessResponse"
+        "400":
+          description: "Invalid request"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "403":
+          $ref: "#/responses/Forbidden"
+        "500":
+          $ref: "#/responses/InternalError"
+
   /admin/role:
     get:
-      summary: "Get all roles"
+      tags: ["Admin - Roles"]
+      summary: "Get all roles (admin only)"
+      security:
+        - CookieAuth: []
       produces:
         - "application/json"
       responses:
         "200":
           description: "A list of roles"
           schema:
-            type: "array"
-            items:
-              $ref: "#/definitions/Role"
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "array"
+                    items:
+                      $ref: "#/definitions/Role"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "403":
+          $ref: "#/responses/Forbidden"
+        "500":
+          $ref: "#/responses/InternalError"
     post:
-      summary: "Create a new role"
+      tags: ["Admin - Roles"]
+      summary: "Create a new role (admin only)"
+      security:
+        - CookieAuth: []
       consumes:
         - "application/json"
       produces:
@@ -78,10 +567,30 @@ paths:
             $ref: "#/definitions/Role"
       responses:
         "201":
-          description: "Role created"
+          description: "Role created. `data` is the new role's **name** (a string), not a Role object."
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "string"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "403":
+          $ref: "#/responses/Forbidden"
+        "500":
+          $ref: "#/responses/InternalError"
+
   /admin/role/{id}:
     patch:
-      summary: "Update a role"
+      tags: ["Admin - Roles"]
+      summary: "Update a role (admin only)"
+      description: "**The server uses `id` from the JSON body, not from the URL.** Send the same id in both."
+      security:
+        - CookieAuth: []
       consumes:
         - "application/json"
       produces:
@@ -100,9 +609,29 @@ paths:
             $ref: "#/definitions/Role"
       responses:
         "200":
-          description: "Role updated"
+          description: "Role updated. `data` is the role's **name** (a string)."
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "string"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "403":
+          $ref: "#/responses/Forbidden"
+        "500":
+          $ref: "#/responses/InternalError"
     delete:
-      summary: "Delete a role"
+      tags: ["Admin - Roles"]
+      summary: "Delete a role (admin only)"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
       parameters:
         - name: "id"
           in: "path"
@@ -112,20 +641,49 @@ paths:
       responses:
         "200":
           description: "Role deleted"
+          schema:
+            $ref: "#/definitions/SuccessResponse"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "403":
+          $ref: "#/responses/Forbidden"
+        "500":
+          $ref: "#/responses/InternalError"
+
   /admin/driver:
     get:
+      tags: ["Admin - Drivers"]
       summary: "Get all drivers"
+      security:
+        - CookieAuth: []
       produces:
         - "application/json"
       responses:
         "200":
-          description: "A list of drivers"
+          description: "A list of drivers wrapped in `data.drivers`"
           schema:
-            type: "array"
-            items:
-              $ref: "#/definitions/Driver"
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "object"
+                    properties:
+                      drivers:
+                        type: "array"
+                        items:
+                          $ref: "#/definitions/DriverRecord"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
     post:
+      tags: ["Admin - Drivers"]
       summary: "Create a new driver"
+      security:
+        - CookieAuth: []
       consumes:
         - "application/json"
       produces:
@@ -139,10 +697,59 @@ paths:
             $ref: "#/definitions/Driver"
       responses:
         "201":
-          description: "Driver created"
+          description: "Driver created. `data.driver` is the driver's first name (the new id is not returned; reload the list)."
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "object"
+                    properties:
+                      driver:
+                        type: "string"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
   /admin/driver/{id}:
+    get:
+      tags: ["Admin - Drivers"]
+      summary: "Get driver detail"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+      responses:
+        "200":
+          description: "Driver detail"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/DriverDetail"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
     patch:
+      tags: ["Admin - Drivers"]
       summary: "Update a driver"
+      security:
+        - CookieAuth: []
       consumes:
         - "application/json"
       produces:
@@ -152,7 +759,7 @@ paths:
           in: "path"
           required: true
           type: "integer"
-          format: "int64"
+          format: "int32"
         - in: "body"
           name: "body"
           description: "Driver data"
@@ -161,32 +768,294 @@ paths:
             $ref: "#/definitions/Driver"
       responses:
         "200":
-          description: "Driver updated"
+          description: "Driver updated. `data.driver` is the driver's first name."
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "object"
+                    properties:
+                      driver:
+                        type: "string"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
     delete:
+      tags: ["Admin - Drivers"]
       summary: "Delete a driver"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
       parameters:
         - name: "id"
           in: "path"
           required: true
           type: "integer"
-          format: "int64"
+          format: "int32"
       responses:
         "200":
           description: "Driver deleted"
+          schema:
+            $ref: "#/definitions/SuccessResponse"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/driver/{id}/payroll:
+    get:
+      tags: ["Admin - Drivers"]
+      summary: "Get driver ledger"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+      responses:
+        "200":
+          description: "Driver ledger retrieved"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "object"
+                    properties:
+                      ledger:
+                        type: "array"
+                        items:
+                          $ref: "#/definitions/DriverLedgerRecord"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+    post:
+      tags: ["Admin - Drivers"]
+      summary: "Add payroll entry for driver"
+      description: "The driver is taken from the URL; `driver_id` in the body is ignored."
+      security:
+        - CookieAuth: []
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/DriverLedgerInput"
+      responses:
+        "200":
+          description: "Payroll entry added"
+          schema:
+            $ref: "#/definitions/SuccessResponse"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/driver/{id}/tracking:
+    get:
+      tags: ["Tracking"]
+      summary: "Get driver GPS tracking status (admin or fleet_manager)"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+      responses:
+        "200":
+          description: "Tracking status"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/TrackingDeviceStatus"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "403":
+          $ref: "#/responses/Forbidden"
+        "500":
+          $ref: "#/responses/InternalError"
+    post:
+      tags: ["Tracking"]
+      summary: "Enable GPS tracking for driver (admin or fleet_manager)"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+      responses:
+        "201":
+          description: "Tracking enabled"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/EnableTrackingResponse"
+        "404":
+          description: "Driver not found"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "403":
+          $ref: "#/responses/Forbidden"
+        "500":
+          $ref: "#/responses/InternalError"
+    delete:
+      tags: ["Tracking"]
+      summary: "Disable GPS tracking for driver (admin or fleet_manager)"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+      responses:
+        "200":
+          description: "Tracking disabled"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/TrackingDeviceStatus"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "403":
+          $ref: "#/responses/Forbidden"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/driver/{id}/locations:
+    get:
+      tags: ["Tracking"]
+      summary: "Get driver location history (admin or fleet_manager)"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+        - name: "from"
+          in: "query"
+          required: false
+          type: "string"
+          format: "date-time"
+          description: "RFC 3339 start timestamp (defaults to 24h ago)"
+        - name: "to"
+          in: "query"
+          required: false
+          type: "string"
+          format: "date-time"
+          description: "RFC 3339 end timestamp (defaults to now)"
+      responses:
+        "200":
+          description: "Driver locations"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "array"
+                    items:
+                      $ref: "#/definitions/LocationPoint"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "403":
+          $ref: "#/responses/Forbidden"
+        "500":
+          $ref: "#/responses/InternalError"
+
   /admin/cars:
     get:
+      tags: ["Admin - Cars"]
       summary: "Get all cars"
+      security:
+        - CookieAuth: []
       produces:
         - "application/json"
       responses:
         "200":
-          description: "A list of cars"
+          description: "A list of cars wrapped in `data.cars`"
           schema:
-            type: "array"
-            items:
-              $ref: "#/definitions/Car"
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "object"
+                    properties:
+                      cars:
+                        type: "array"
+                        items:
+                          $ref: "#/definitions/Car"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
     post:
+      tags: ["Admin - Cars"]
       summary: "Create a new car"
+      security:
+        - CookieAuth: []
       consumes:
         - "application/json"
       produces:
@@ -201,9 +1070,29 @@ paths:
       responses:
         "201":
           description: "Car created"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "object"
+                    properties:
+                      car:
+                        $ref: "#/definitions/Car"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
   /admin/cars/{id}:
     patch:
+      tags: ["Admin - Cars"]
       summary: "Update a car"
+      security:
+        - CookieAuth: []
       consumes:
         - "application/json"
       produces:
@@ -223,8 +1112,29 @@ paths:
       responses:
         "200":
           description: "Car updated"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "object"
+                    properties:
+                      car:
+                        $ref: "#/definitions/Car"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
     delete:
+      tags: ["Admin - Cars"]
       summary: "Delete a car"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
       parameters:
         - name: "id"
           in: "path"
@@ -234,9 +1144,21 @@ paths:
       responses:
         "200":
           description: "Car deleted"
+          schema:
+            $ref: "#/definitions/SuccessResponse"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
   /admin/cars/{id}/driver:
     patch:
+      tags: ["Admin - Cars"]
       summary: "Change a car's driver"
+      security:
+        - CookieAuth: []
       consumes:
         - "application/json"
       produces:
@@ -256,20 +1178,44 @@ paths:
       responses:
         "200":
           description: "Car's driver updated"
+          schema:
+            $ref: "#/definitions/SuccessResponse"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
   /admin/trip:
     get:
+      tags: ["Admin - Trips"]
       summary: "Get all trips"
+      security:
+        - CookieAuth: []
       produces:
         - "application/json"
       responses:
         "200":
           description: "A list of trips"
           schema:
-            type: "array"
-            items:
-              $ref: "#/definitions/Trip"
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "array"
+                    items:
+                      $ref: "#/definitions/TripRecord"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
     post:
+      tags: ["Admin - Trips"]
       summary: "Create a new trip"
+      security:
+        - CookieAuth: []
       consumes:
         - "application/json"
       produces:
@@ -280,13 +1226,34 @@ paths:
           description: "Trip data"
           required: true
           schema:
-            $ref: "#/definitions/Trip"
+            $ref: "#/definitions/TripInput"
       responses:
         "201":
-          description: "Trip created"
+          description: "Trip created (status `CONFIRMED`). Returns the new trip id."
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "object"
+                    properties:
+                      id:
+                        type: "integer"
+                        format: "int32"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
   /admin/trip/{id}:
     get:
+      tags: ["Admin - Trips"]
       summary: "Get trip detail"
+      security:
+        - CookieAuth: []
       produces:
         - "application/json"
       parameters:
@@ -299,9 +1266,23 @@ paths:
         "200":
           description: "Trip detail"
           schema:
-            $ref: "#/definitions/TripDetail"
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/TripDetail"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
     patch:
+      tags: ["Admin - Trips"]
       summary: "Update a trip"
+      security:
+        - CookieAuth: []
       consumes:
         - "application/json"
       produces:
@@ -317,12 +1298,30 @@ paths:
           description: "Trip data"
           required: true
           schema:
-            $ref: "#/definitions/Trip"
+            $ref: "#/definitions/TripInput"
       responses:
         "200":
           description: "Trip updated"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/TripRecord"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
     delete:
+      tags: ["Admin - Trips"]
       summary: "Delete a trip"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
       parameters:
         - name: "id"
           in: "path"
@@ -332,20 +1331,106 @@ paths:
       responses:
         "200":
           description: "Trip deleted"
-  /admin/expense:
+          schema:
+            $ref: "#/definitions/SuccessResponse"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/trip/{id}/locations:
     get:
+      tags: ["Tracking"]
+      summary: "Get trip location history (admin or fleet_manager)"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+      responses:
+        "200":
+          description: "Trip locations"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "array"
+                    items:
+                      $ref: "#/definitions/LocationPoint"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "403":
+          $ref: "#/responses/Forbidden"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/tracking/live:
+    get:
+      tags: ["Tracking"]
+      summary: "Get live positions of tracked drivers (admin or fleet_manager)"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
+      responses:
+        "200":
+          description: "Live driver positions"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "array"
+                    items:
+                      $ref: "#/definitions/LiveDriverPosition"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "403":
+          $ref: "#/responses/Forbidden"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/expense-type:
+    get:
+      tags: ["Admin - Expense Types"]
       summary: "Get all expense types"
+      security:
+        - CookieAuth: []
       produces:
         - "application/json"
       responses:
         "200":
           description: "A list of expense types"
           schema:
-            type: "array"
-            items:
-              $ref: "#/definitions/Expense"
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "array"
+                    items:
+                      $ref: "#/definitions/Expense"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
     post:
-      summary: "Create a new expense"
+      tags: ["Admin - Expense Types"]
+      summary: "Create a new expense type"
+      security:
+        - CookieAuth: []
       consumes:
         - "application/json"
       produces:
@@ -353,38 +1438,380 @@ paths:
       parameters:
         - in: "body"
           name: "body"
-          description: "Expense data"
+          description: "Expense type data"
           required: true
           schema:
-            $ref: "#/definitions/Expense"
+            $ref: "#/definitions/ExpenseTypeInput"
       responses:
         "201":
-          description: "Expense created"
+          description: "Expense type created. Returns the new id."
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "object"
+                    properties:
+                      id:
+                        type: "integer"
+                        format: "int32"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/expense-type/{id}:
+    patch:
+      tags: ["Admin - Expense Types"]
+      summary: "Update an expense type"
+      security:
+        - CookieAuth: []
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/ExpenseTypeInput"
+      responses:
+        "200":
+          description: "Expense type updated"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "object"
+                    properties:
+                      id:
+                        type: "integer"
+                        format: "int32"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+    delete:
+      tags: ["Admin - Expense Types"]
+      summary: "Delete an expense type"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+      responses:
+        "200":
+          description: "Expense type deleted"
+          schema:
+            $ref: "#/definitions/SuccessResponse"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
   /admin/stats:
     get:
-      summary: "Get stats"
+      tags: ["Admin - Stats"]
+      summary: "Get dashboard stats"
+      security:
+        - CookieAuth: []
       produces:
         - "application/json"
       responses:
         "200":
-          description: "Stats"
+          description: "Dashboard counts"
           schema:
-            $ref: "#/definitions/Stats"
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/Stats"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/income/advance:
+    post:
+      tags: ["Admin - Income"]
+      summary: "Register advance payment"
+      security:
+        - CookieAuth: []
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/Transaction"
+      responses:
+        "200":
+          description: "Transaction created; trip `paid_amount`/`payment_status` updated"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/TransactionRecord"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/income/advance/{id}:
+    patch:
+      tags: ["Admin - Income"]
+      summary: "Update advance payment"
+      security:
+        - CookieAuth: []
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/Transaction"
+      responses:
+        "200":
+          description: "Advance payment updated"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/TransactionRecord"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/income/settlement:
+    post:
+      tags: ["Admin - Income"]
+      summary: "Register final settlement payment"
+      security:
+        - CookieAuth: []
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/Transaction"
+      responses:
+        "200":
+          description: "Transaction created; trip `paid_amount`/`payment_status` updated"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/TransactionRecord"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/income/settlement/{id}:
+    patch:
+      tags: ["Admin - Income"]
+      summary: "Update settlement payment"
+      security:
+        - CookieAuth: []
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/Transaction"
+      responses:
+        "200":
+          description: "Settlement payment updated"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/TransactionRecord"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/income/maintenance:
+    post:
+      tags: ["Admin - Income"]
+      summary: "Register maintenance log"
+      security:
+        - CookieAuth: []
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/MaintenanceAddition"
+      responses:
+        "200":
+          description: "Maintenance log created"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/MaintenanceLog"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/income/summary:
+    get:
+      tags: ["Admin - Income"]
+      summary: "Get financial summary"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
+      responses:
+        "200":
+          description: "Financial summary"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/FinancialSummary"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /admin/income/trip/{tripId}:
+    get:
+      tags: ["Admin - Income"]
+      summary: "Get trip profitability"
+      security:
+        - CookieAuth: []
+      produces:
+        - "application/json"
+      parameters:
+        - name: "tripId"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+      responses:
+        "200":
+          description: "Trip profitability"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/TripProfitability"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
   /finance/trip:
     get:
+      tags: ["Finance"]
       summary: "Get all trips"
+      security:
+        - CookieAuth: []
       produces:
         - "application/json"
       responses:
         "200":
           description: "A list of trips"
           schema:
-            type: "array"
-            items:
-              $ref: "#/definitions/Trip"
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "array"
+                    items:
+                      $ref: "#/definitions/TripRecord"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
   /finance/trip/{id}:
     get:
+      tags: ["Finance"]
       summary: "Get trip detail"
+      security:
+        - CookieAuth: []
       produces:
         - "application/json"
       parameters:
@@ -397,10 +1824,23 @@ paths:
         "200":
           description: "Trip detail"
           schema:
-            $ref: "#/definitions/TripDetail"
-  /finance/trip/{id}/upload-receipt:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/TripDetail"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
     post:
-      summary: "Upload a receipt for a trip"
+      tags: ["Finance"]
+      summary: "Create a trip expense (with optional receipt upload)"
+      security:
+        - CookieAuth: []
       consumes:
         - "multipart/form-data"
       produces:
@@ -411,17 +1851,120 @@ paths:
           required: true
           type: "integer"
           format: "int32"
+        - name: "expense_id"
+          in: "formData"
+          required: true
+          type: "integer"
+          format: "int32"
+        - name: "cost"
+          in: "formData"
+          required: true
+          type: "number"
+          format: "double"
+        - name: "transaction_date"
+          in: "formData"
+          required: true
+          type: "string"
+          description: "Format: `2006-01-02T15:04`"
+        - name: "remark"
+          in: "formData"
+          required: false
+          type: "string"
         - name: "receipt"
           in: "formData"
-          description: "Receipt file"
-          required: true
+          description: "Optional receipt file"
+          required: false
           type: "file"
       responses:
         "200":
-          description: "Receipt uploaded"
-  /user/password:
+          description: "Expense added. `data` is the trip id (an integer)."
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "integer"
+                    format: "int32"
+        "409":
+          description: "Expense for this trip already exists"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /finance/trip-expense/{id}:
+    patch:
+      tags: ["Finance"]
+      summary: "Update a trip expense (with optional receipt upload)"
+      description: "`id` is the **trip id**; the expense row is identified by `trip id + expense_id`. `remark` is required here (unlike create). If no new `receipt` is sent, the stored receipt URL is replaced with an empty value."
+      security:
+        - CookieAuth: []
+      consumes:
+        - "multipart/form-data"
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "path"
+          required: true
+          type: "integer"
+          format: "int32"
+        - name: "expense_id"
+          in: "formData"
+          required: true
+          type: "integer"
+          format: "int32"
+        - name: "cost"
+          in: "formData"
+          required: true
+          type: "number"
+          format: "double"
+        - name: "transaction_date"
+          in: "formData"
+          required: true
+          type: "string"
+          description: "Format: `2006-01-02T15:04`"
+        - name: "remark"
+          in: "formData"
+          required: true
+          type: "string"
+        - name: "receipt"
+          in: "formData"
+          description: "Optional receipt file"
+          required: false
+          type: "file"
+      responses:
+        "201":
+          description: "Expense updated (note: status code is 201)"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/TripExpenseRecord"
+        "409":
+          description: "Expense for this trip already exists"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /finance/driver-pay:
     post:
-      summary: "Reset user password"
+      tags: ["Finance"]
+      summary: "Register driver payment"
+      security:
+        - CookieAuth: []
       consumes:
         - "application/json"
       produces:
@@ -429,28 +1972,289 @@ paths:
       parameters:
         - in: "body"
           name: "body"
-          description: "Password reset data"
           required: true
           schema:
-            type: "object"
-            properties:
-              password:
-                type: "string"
+            $ref: "#/definitions/DriverPayment"
       responses:
         "200":
-          description: "Password reset successful"
+          description: "Driver payment recorded as a ledger entry"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/DriverLedgerRecord"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /finance/trip-overhead:
+    post:
+      tags: ["Finance"]
+      summary: "Register trip overhead"
+      security:
+        - CookieAuth: []
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/TripOverhead"
+      responses:
+        "200":
+          description: "Trip overhead recorded"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/TransactionRecord"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /finance/trip-return:
+    post:
+      tags: ["Finance"]
+      summary: "Register trip return payment"
+      security:
+        - CookieAuth: []
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      parameters:
+        - in: "body"
+          name: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/ReturnPayment"
+      responses:
+        "200":
+          description: "Return payment recorded. Returns the updated trip."
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    $ref: "#/definitions/TripRecord"
+        "400":
+          $ref: "#/responses/BadRequest"
+        "401":
+          $ref: "#/responses/Unauthorized"
+        "500":
+          $ref: "#/responses/InternalError"
+
+  /track:
+    get:
+      tags: ["Tracking"]
+      summary: "Ingest Traccar GPS position (OsmAnd query format)"
+      description: "Public endpoint; device token (`id`) is the credential."
+      produces:
+        - "application/json"
+      parameters:
+        - name: "id"
+          in: "query"
+          required: true
+          type: "string"
+        - name: "lat"
+          in: "query"
+          required: true
+          type: "number"
+          format: "double"
+        - name: "lon"
+          in: "query"
+          required: true
+          type: "number"
+          format: "double"
+        - name: "timestamp"
+          in: "query"
+          required: false
+          type: "string"
+      responses:
+        "200":
+          description: "Location(s) received"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "object"
+                    properties:
+                      received:
+                        type: "integer"
+                        description: "Number of fixes in the request"
+                      stored:
+                        type: "integer"
+                        description: "Number of fixes stored (invalid/old fixes are dropped)"
+        "403":
+          description: "Unknown or revoked device token"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "400":
+          description: "Missing device id or unparsable position"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "500":
+          $ref: "#/responses/InternalError"
+    post:
+      tags: ["Tracking"]
+      summary: "Ingest Traccar GPS position (JSON or form)"
+      description: "Public endpoint; `device_id` (JSON) or `id` (form/query) is the credential."
+      consumes:
+        - "application/json"
+        - "application/x-www-form-urlencoded"
+      produces:
+        - "application/json"
+      parameters:
+        - in: "body"
+          name: "body"
+          required: false
+          schema:
+            $ref: "#/definitions/TraccarJSONPayload"
+      responses:
+        "200":
+          description: "Location(s) received"
+          schema:
+            allOf:
+              - $ref: "#/definitions/SuccessResponse"
+              - type: "object"
+                properties:
+                  data:
+                    type: "object"
+                    properties:
+                      received:
+                        type: "integer"
+                        description: "Number of fixes in the request"
+                      stored:
+                        type: "integer"
+                        description: "Number of fixes stored (invalid/old fixes are dropped)"
+        "403":
+          description: "Unknown or revoked device token"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "400":
+          description: "Missing device id or unparsable position"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        "500":
+          $ref: "#/responses/InternalError"
+
 definitions:
-  UserLogin:
+  SuccessResponse:
     type: "object"
     properties:
+      message:
+        type: "string"
+      data:
+        type: "object"
+      status_code:
+        type: "integer"
+  ErrorResponse:
+    type: "object"
+    properties:
+      message:
+        type: "string"
+      status_code:
+        type: "integer"
+  UserLogin:
+    type: "object"
+    required:
+      - "user_name"
+      - "password"
+    properties:
+      user_name:
+        type: "string"
+      password:
+        type: "string"
+  PasswordResetBody:
+    type: "object"
+    required:
+      - "password"
+    properties:
+      password:
+        type: "string"
+  UpdateProfileRequest:
+    type: "object"
+    description: "Only send the fields you want to change"
+    properties:
+      first_name:
+        type: "string"
+      last_name:
+        type: "string"
+  ChangePasswordRequest:
+    type: "object"
+    required:
+      - "current_password"
+      - "new_password"
+    properties:
+      current_password:
+        type: "string"
+      new_password:
+        type: "string"
+  AdminResetPasswordRequest:
+    type: "object"
+    required:
+      - "user_id"
+      - "temporary_password"
+    properties:
+      user_id:
+        type: "string"
+        format: "uuid"
+      temporary_password:
+        type: "string"
+  UserCreate:
+    type: "object"
+    required:
+      - "user_name"
+      - "first_name"
+      - "last_name"
+      - "phone_number"
+      - "password"
+      - "role_id"
+    properties:
+      user_name:
+        type: "string"
+      first_name:
+        type: "string"
+      last_name:
+        type: "string"
       phone_number:
         type: "string"
       password:
         type: "string"
+      role_id:
+        type: "integer"
+        format: "int32"
+  UserUpdateRequest:
+    type: "object"
+    properties:
+      first_name:
+        type: "string"
+      last_name:
+        type: "string"
+      phone_number:
+        type: "string"
   User:
     type: "object"
     properties:
-      first_.name:
+      user_name:
+        type: "string"
+      first_name:
         type: "string"
       last_name:
         type: "string"
@@ -459,59 +2263,285 @@ definitions:
       role_id:
         type: "integer"
         format: "int32"
-  Role:
+  UserRecord:
     type: "object"
     properties:
       id:
-        type: "integer"
-        format: "int32"
-      name:
         type: "string"
-  Driver:
-    type: "object"
-    properties:
-      id:
-        type: "integer"
-        format: "int64"
+        format: "uuid"
+      user_name:
+        type: "string"
       first_name:
         type: "string"
       last_name:
         type: "string"
       phone_number:
         type: "string"
-      licenses:
+      role_id:
+        type: "integer"
+        format: "int32"
+      status:
+        type: "string"
+        enum: ["uninitialized", "active", "unactive", "deleted"]
+      created_at:
+        type: "string"
+        format: "date-time"
+      updated_at:
+        type: "string"
+        format: "date-time"
+  UserProfile:
+    type: "object"
+    properties:
+      id:
+        type: "string"
+        format: "uuid"
+      user_name:
+        type: "string"
+      first_name:
+        type: "string"
+      last_name:
+        type: "string"
+      phone_number:
         type: "string"
       status:
         type: "string"
+        enum: ["uninitialized", "active", "unactive", "deleted"]
+      role_id:
+        type: "integer"
+        format: "int32"
+      role_name:
+        type: "string"
+      created_at:
+        type: "string"
+        format: "date-time"
+      updated_at:
+        type: "string"
+        format: "date-time"
+  Role:
+    type: "object"
+    properties:
+      id:
+        type: "integer"
+        format: "int32"
+        description: "Ignored on create; required in the body on update"
+      name:
+        type: "string"
+  Driver:
+    type: "object"
+    description: "Driver create/update payload"
+    properties:
+      first_name:
+        type: "string"
+      last_name:
+        type: "string"
+      phone_number:
+        type: "string"
+      license_number:
+        type: "string"
+      status:
+        type: "string"
+        example: "active"
+  DriverRecord:
+    type: "object"
+    properties:
+      id:
+        type: "integer"
+        format: "int32"
+      first_name:
+        type: "string"
+      last_name:
+        type: "string"
+      phone_number:
+        type: "string"
+      license_number:
+        type: "string"
+      status:
+        type: "string"
+        x-nullable: true
+      created_at:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
+      updated_at:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
+  DriverDetail:
+    type: "object"
+    properties:
+      id:
+        type: "integer"
+        format: "int32"
+      first_name:
+        type: "string"
+      last_name:
+        type: "string"
+      phone_number:
+        type: "string"
+      license_number:
+        type: "string"
+      status:
+        type: "string"
+        x-nullable: true
+      created_at:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
+      updated_at:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
+      license_plate:
+        type: "string"
+        x-nullable: true
+        description: "Plate of the car currently assigned to the driver, if any"
+      ledger_entries:
+        type: "array"
+        description: "Built by Postgres; timestamps have no timezone"
+        items:
+          $ref: "#/definitions/DriverLedgerRecord"
+  DriverLedgerInput:
+    type: "object"
+    required: ["entry_type", "amount"]
+    properties:
+      entry_type:
+        type: "string"
+        description: "Free text (no server-side enum). Conventional values: `SALARY_CREDIT`, `ADVANCE_DEBIT`, `TRIP_ALLOWANCE`; driver payments use `EXPENSE_DRIVER_PAYROLL`."
+      amount:
+        type: "number"
+        format: "double"
+      notes:
+        type: "string"
+  DriverLedgerRecord:
+    type: "object"
+    properties:
+      id:
+        type: "integer"
+        format: "int32"
+      driver_id:
+        type: "integer"
+        format: "int32"
+      entry_type:
+        type: "string"
+        description: "Free text (no server-side enum). Conventional values: `SALARY_CREDIT`, `ADVANCE_DEBIT`, `TRIP_ALLOWANCE`; driver payments use `EXPENSE_DRIVER_PAYROLL`."
+      amount:
+        type: "number"
+        format: "double"
+      related_trip_id:
+        type: "integer"
+        format: "int32"
+        x-nullable: true
+      notes:
+        type: "string"
+        x-nullable: true
+      created_at:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
   Car:
     type: "object"
     properties:
       id:
         type: "integer"
         format: "int32"
+        readOnly: true
+      current_driver_id:
+        type: "integer"
+        format: "int32"
+        x-nullable: true
+      license_plate:
+        type: "string"
       make:
         type: "string"
       model:
         type: "string"
-      plate_number:
+      year:
+        type: "integer"
+        format: "int32"
+        minimum: 1900
+      color:
         type: "string"
+      vin:
+        type: "string"
+      fuel_type:
+        type: "string"
+        enum: ["petrol", "diesel", "electric", "hybrid"]
+      transmission:
+        type: "string"
+        enum: ["manual", "automatic"]
+      mileage:
+        type: "string"
+        format: "decimal"
+        x-nullable: true
+        example: "1200.50"
+        description: "Returned as a string; requests may send a number or a string"
       status:
         type: "string"
-        enum:
-          - "available"
-          - "in_use"
-          - "maintenance"
-          - "inactive"
-      driver_id:
-        type: "integer"
-        format: "int64"
+        enum: ["available", "in_use", "maintenance", "inactive"]
+      created_at:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
+      updated_at:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
   CarDriver:
     type: "object"
+    required:
+      - "current_driver_id"
     properties:
       current_driver_id:
         type: "integer"
-        format: "int64"
-  Trip:
+        format: "int32"
+  TripInput:
+    type: "object"
+    description: "All fields are written on update too (send the full trip, not only changed fields)."
+    properties:
+      driver_id:
+        type: "integer"
+        format: "int32"
+      total_cost:
+        type: "number"
+        format: "double"
+      origin:
+        type: "string"
+      destination:
+        type: "string"
+      departure_time:
+        type: "string"
+        example: "2026-11-25T10:30"
+        description: "`YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS`, no timezone"
+      arrival_time:
+        type: "string"
+        example: "2026-11-25T10:30"
+        description: "`YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS`, no timezone"
+      items:
+        type: "string"
+      total_quote:
+        type: "number"
+        format: "double"
+      item_weight:
+        type: "number"
+        format: "double"
+      co_driver_name:
+        type: "string"
+      client_name:
+        type: "string"
+      client_phone_number:
+        type: "string"
+      settlement_due_date:
+        type: "string"
+        example: "2026-12-01T00:00"
+        description: "Datetime format, **not** a plain date: `YYYY-MM-DDTHH:MM`. Only the date part is stored."
+  TripRecord:
     type: "object"
     properties:
       id:
@@ -519,15 +2549,86 @@ definitions:
         format: "int32"
       driver_id:
         type: "integer"
-        format: "int64"
+        format: "int32"
       total_cost:
         type: "number"
         format: "double"
-      expenses:
-        type: "array"
-        items:
-          type: "integer"
-          format: "int32"
+      receipt_url:
+        type: "string"
+        x-nullable: true
+      approved_by:
+        type: "string"
+        format: "uuid"
+      isactive:
+        type: "boolean"
+        x-nullable: true
+      client_name:
+        type: "string"
+        x-nullable: true
+      total_quote:
+        type: "string"
+        format: "decimal"
+        x-nullable: true
+        example: "1200.50"
+      paid_amount:
+        type: "string"
+        format: "decimal"
+        x-nullable: true
+        example: "1200.50"
+      returned_amount:
+        type: "string"
+        format: "decimal"
+        x-nullable: true
+        example: "1200.50"
+      payment_status:
+        $ref: "#/definitions/NullPaymentStatus"
+      status:
+        $ref: "#/definitions/NullTripStatus"
+      origin:
+        type: "string"
+        x-nullable: true
+      destination:
+        type: "string"
+        x-nullable: true
+      departure_time:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
+      arrival_time:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
+      items:
+        type: "string"
+        x-nullable: true
+      item_weight:
+        type: "string"
+        format: "decimal"
+        x-nullable: true
+        example: "1200.50"
+      co_driver_name:
+        type: "string"
+        x-nullable: true
+      client_phone_number:
+        type: "string"
+        x-nullable: true
+      settlement_due_date:
+        type: "string"
+        format: "date"
+        example: "2026-11-25"
+        x-nullable: true
+      created_at:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
+      updated_at:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
   TripDetail:
     type: "object"
     properties:
@@ -536,16 +2637,98 @@ definitions:
         format: "int32"
       driver_id:
         type: "integer"
-        format: "int64"
+        format: "int32"
       total_cost:
         type: "number"
         format: "double"
+      receipt_url:
+        type: "string"
+        x-nullable: true
+      approved_by:
+        type: "string"
+        format: "uuid"
+      isactive:
+        type: "boolean"
+        x-nullable: true
+      client_name:
+        type: "string"
+        x-nullable: true
+      total_quote:
+        type: "string"
+        format: "decimal"
+        x-nullable: true
+        example: "1200.50"
+      paid_amount:
+        type: "string"
+        format: "decimal"
+        x-nullable: true
+        example: "1200.50"
+      returned_amount:
+        type: "string"
+        format: "decimal"
+        x-nullable: true
+        example: "1200.50"
+      payment_status:
+        $ref: "#/definitions/NullPaymentStatus"
+      status:
+        $ref: "#/definitions/NullTripStatus"
+      origin:
+        type: "string"
+        x-nullable: true
+      destination:
+        type: "string"
+        x-nullable: true
+      departure_time:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
+      arrival_time:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
+      items:
+        type: "string"
+        x-nullable: true
+      item_weight:
+        type: "string"
+        format: "decimal"
+        x-nullable: true
+        example: "1200.50"
+      co_driver_name:
+        type: "string"
+        x-nullable: true
+      client_phone_number:
+        type: "string"
+        x-nullable: true
+      settlement_due_date:
+        type: "string"
+        format: "date"
+        example: "2026-11-25"
+        x-nullable: true
+      created_at:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
+      updated_at:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
+      driver_first_name:
+        type: "string"
+      driver_last_name:
+        type: "string"
       expenses:
         type: "array"
         items:
-          $ref: "#/definitions/Expense"
-      receipt_url:
-        type: "string"
+          $ref: "#/definitions/TripDetailExpense"
+      incomes:
+        type: "array"
+        items:
+          $ref: "#/definitions/TripDetailIncome"
   Expense:
     type: "object"
     properties:
@@ -554,18 +2737,426 @@ definitions:
         format: "int32"
       name:
         type: "string"
+  ExpenseTypeInput:
+    type: "object"
+    required:
+      - "name"
+    properties:
+      name:
+        type: "string"
   Stats:
     type: "object"
     properties:
-      drivers:
+      driver_count:
         type: "integer"
         format: "int64"
-      cars:
+      car_count:
         type: "integer"
         format: "int64"
-      trips:
+      expense_type_count:
         type: "integer"
         format: "int64"
+      trip_count:
+        type: "integer"
+        format: "int64"
+      active_driver_count:
+        type: "integer"
+        format: "int64"
+      active_trips_count:
+        type: "integer"
+        format: "int64"
+  Transaction:
+    type: "object"
+    description: "Payment request payload (advance / settlement)"
+    required: ["trip_id", "amount", "method", "transaction_date"]
+    properties:
+      trip_id:
+        type: "integer"
+      amount:
+        type: "number"
+        format: "double"
+      method:
+        type: "string"
+        description: "Payment method, stored as `payment_method`"
+      receiver_name:
+        type: "string"
+        description: "Stored as `handler_name`"
+      notes:
+        type: "string"
+      transaction_date:
+        type: "string"
+        example: "2026-11-25T10:30"
+        description: "`YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS`, no timezone"
+  MaintenanceAddition:
+    type: "object"
+    required: ["car_id", "type", "name", "cost"]
+    properties:
+      car_id:
+        type: "integer"
+        format: "int32"
+      type:
+        type: "string"
+        enum: ["PREVENTIVE", "CORRECTIVE"]
+      name:
+        type: "string"
+      cost:
+        type: "number"
+        format: "double"
+      description:
+        type: "string"
+  FinancialSummary:
+    type: "object"
+    properties:
+      revenue:
+        type: "number"
+        format: "double"
       expenses:
+        type: "object"
+        properties:
+          maintenance:
+            type: "number"
+            format: "double"
+          driver_payroll:
+            type: "number"
+            format: "double"
+          trip_overheads:
+            type: "number"
+            format: "double"
+      net_profit:
+        type: "number"
+        format: "double"
+      profit_margin:
+        type: "number"
+        format: "double"
+  TripProfitability:
+    type: "object"
+    properties:
+      trip_id:
+        type: "integer"
+        format: "int32"
+      total_revenue:
+        type: "number"
+        format: "double"
+      total_expenses:
+        type: "number"
+        format: "double"
+      net_profit:
+        type: "number"
+        format: "double"
+  DriverPayment:
+    type: "object"
+    required: ["driver_id", "amount"]
+    properties:
+      driver_id:
+        type: "integer"
+      amount:
+        type: "number"
+        format: "double"
+      notes:
+        type: "string"
+  TripOverhead:
+    type: "object"
+    required: ["trip_id", "amount", "method"]
+    properties:
+      trip_id:
+        type: "integer"
+      amount:
+        type: "number"
+        format: "double"
+      method:
+        type: "string"
+      receiver_name:
+        type: "string"
+      notes:
+        type: "string"
+  ReturnPayment:
+    type: "object"
+    properties:
+      trip_id:
+        type: "integer"
+      amount:
+        type: "number"
+        format: "double"
+  TrackingDeviceStatus:
+    type: "object"
+    properties:
+      enabled:
+        type: "boolean"
+      created_at:
+        type: "string"
+        format: "date-time"
+      last_seen_at:
+        type: "string"
+        format: "date-time"
+  EnableTrackingResponse:
+    allOf:
+      - $ref: "#/definitions/TrackingDeviceStatus"
+      - type: "object"
+        properties:
+          device_id:
+            type: "string"
+          server_url:
+            type: "string"
+  LocationPoint:
+    type: "object"
+    properties:
+      id:
         type: "integer"
         format: "int64"
+      trip_id:
+        type: "integer"
+        format: "int32"
+      latitude:
+        type: "number"
+        format: "double"
+      longitude:
+        type: "number"
+        format: "double"
+      speed_kmh:
+        type: "number"
+        format: "float"
+      heading:
+        type: "number"
+        format: "float"
+      accuracy_m:
+        type: "number"
+        format: "float"
+      battery_pct:
+        type: "number"
+        format: "float"
+      recorded_at:
+        type: "string"
+        format: "date-time"
+  LiveDriverPosition:
+    type: "object"
+    properties:
+      driver_id:
+        type: "integer"
+        format: "int32"
+      first_name:
+        type: "string"
+      last_name:
+        type: "string"
+      phone_number:
+        type: "string"
+      license_plate:
+        type: "string"
+      last_seen_at:
+        type: "string"
+        format: "date-time"
+      trip_id:
+        type: "integer"
+        format: "int32"
+      latitude:
+        type: "number"
+        format: "double"
+      longitude:
+        type: "number"
+        format: "double"
+      speed_kmh:
+        type: "number"
+        format: "float"
+      heading:
+        type: "number"
+        format: "float"
+      accuracy_m:
+        type: "number"
+        format: "float"
+      battery_pct:
+        type: "number"
+        format: "float"
+      recorded_at:
+        type: "string"
+        format: "date-time"
+  TraccarJSONPayload:
+    type: "object"
+    required:
+      - "device_id"
+      - "location"
+    properties:
+      device_id:
+        type: "string"
+      location:
+        type: "object"
+        description: "Single location object or array of location objects"
+  LoginData:
+    type: "object"
+    description: "Present only for mobile clients or when the user must set a password"
+    properties:
+      access_token:
+        type: "string"
+      refresh_token:
+        type: "string"
+      reset_token:
+        type: "string"
+        description: "Present when the user must set a new password (then call POST /user/password)"
+  NullTripStatus:
+    type: "object"
+    description: "Nullable enum wrapper. When `valid` is false the trip has no status."
+    properties:
+      trip_status:
+        type: "string"
+        enum: ["PLANNED", "CONFIRMED", "COMPLETED", "CANCELLED", ""]
+      valid:
+        type: "boolean"
+  NullPaymentStatus:
+    type: "object"
+    description: "Nullable enum wrapper. When `valid` is false the trip has no payment status."
+    properties:
+      payment_status:
+        type: "string"
+        enum: ["PENDING", "PARTIAL", "PAID", ""]
+      valid:
+        type: "boolean"
+  TripDetailExpense:
+    type: "object"
+    description: "Built by Postgres (json_build_object). Numbers are real JSON numbers here."
+    properties:
+      expense_id:
+        type: "integer"
+      expense_name:
+        type: "string"
+      cost:
+        type: "number"
+      receipt_url:
+        type: "string"
+        x-nullable: true
+      remark:
+        type: "string"
+        x-nullable: true
+      transaction_date:
+        type: "string"
+        format: "date"
+        example: "2026-11-25"
+  TripDetailIncome:
+    type: "object"
+    description: "Built by Postgres (json_build_object). Numbers are real JSON numbers here."
+    properties:
+      id:
+        type: "integer"
+      amount:
+        type: "number"
+      category:
+        type: "string"
+        enum: ["INCOME_DEPOSIT", "INCOME_FINAL"]
+      payment_method:
+        type: "string"
+      notes:
+        type: "string"
+        x-nullable: true
+      transaction_date:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+      created_at:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+      receiver_name:
+        type: "string"
+        x-nullable: true
+      creator:
+        type: "object"
+        properties:
+          id:
+            type: "string"
+            format: "uuid"
+          name:
+            type: "string"
+  TransactionRecord:
+    type: "object"
+    properties:
+      id:
+        type: "integer"
+        format: "int32"
+      trip_id:
+        type: "integer"
+        format: "int32"
+        x-nullable: true
+      amount:
+        type: "number"
+        format: "double"
+      category:
+        type: "string"
+        enum: ["INCOME_DEPOSIT", "INCOME_FINAL", "EXPENSE_TRIP", "EXPENSE_OVERHEAD", "EXPENSE_MAINTENANCE", "EXPENSE_DRIVER_PAYROLL"]
+      payment_method:
+        type: "string"
+      handled_by:
+        type: "string"
+        format: "uuid"
+        x-nullable: true
+      handler_name:
+        type: "string"
+        x-nullable: true
+      notes:
+        type: "string"
+        x-nullable: true
+      transaction_date:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
+      created_at:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
+  MaintenanceLog:
+    type: "object"
+    properties:
+      id:
+        type: "integer"
+        format: "int32"
+      car_id:
+        type: "integer"
+        format: "int32"
+      maintenance_type:
+        type: "string"
+        enum: ["PREVENTIVE", "CORRECTIVE"]
+      maintenance_name:
+        type: "string"
+      cost:
+        type: "number"
+        format: "double"
+      description:
+        type: "string"
+      service_provider:
+        type: "string"
+        x-nullable: true
+      service_date:
+        type: "string"
+        format: "date"
+        example: "2026-11-25"
+        x-nullable: true
+      created_at:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
+  TripExpenseRecord:
+    type: "object"
+    properties:
+      trip_id:
+        type: "integer"
+        format: "int32"
+      expenses_id:
+        type: "integer"
+        format: "int32"
+      receipt_url:
+        type: "string"
+        x-nullable: true
+      remark:
+        type: "string"
+        x-nullable: true
+      cost:
+        type: "number"
+        format: "double"
+      transaction_date:
+        type: "string"
+        format: "date"
+        example: "2026-11-25"
+      updated_at:
+        type: "string"
+        example: "2026-11-25T10:30:00"
+        description: "Timestamp without timezone"
+        x-nullable: true
