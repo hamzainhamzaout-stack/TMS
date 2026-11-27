@@ -407,7 +407,34 @@ func (ah *AuthHandler) GetUsersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responses.SuccessJSONResponse("Users retrieved successfully", users, http.StatusOK, w)
+	// Map to a response type so DB-only fields (password_hash) never reach clients.
+	type userResponse struct {
+		ID          string    `json:"id"`
+		UserName    string    `json:"user_name"`
+		FirstName   string    `json:"first_name"`
+		LastName    string    `json:"last_name"`
+		PhoneNumber string    `json:"phone_number"`
+		RoleID      int32     `json:"role_id"`
+		Status      string    `json:"status"`
+		CreatedAt   time.Time `json:"created_at"`
+		UpdatedAt   time.Time `json:"updated_at"`
+	}
+	out := make([]userResponse, 0, len(users))
+	for _, u := range users {
+		out = append(out, userResponse{
+			ID:          u.ID.String(),
+			UserName:    u.UserName,
+			FirstName:   u.FirstName,
+			LastName:    u.LastName,
+			PhoneNumber: u.PhoneNumber,
+			RoleID:      u.RoleID,
+			Status:      string(u.Status),
+			CreatedAt:   u.CreatedAt,
+			UpdatedAt:   u.UpdatedAt,
+		})
+	}
+
+	responses.SuccessJSONResponse("Users retrieved successfully", out, http.StatusOK, w)
 }
 
 func (ah *AuthHandler) UpdateProfileHandler(w http.ResponseWriter, r *http.Request) {

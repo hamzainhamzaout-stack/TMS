@@ -857,7 +857,7 @@ func (h *DriverHandler) GetTripProfitability(w http.ResponseWriter, r *http.Requ
 func (h *DriverHandler) RegisterDriverPayment(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("Registering driver payment")
 
-	userID, ok := r.Context().Value("user_id").(string)
+	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
 		responses.ErrorJSONResponse(fmt.Errorf("unauthorized action"), http.StatusUnauthorized, w, nil)
 		return
@@ -880,7 +880,7 @@ func (h *DriverHandler) RegisterTripOverhead(w http.ResponseWriter, r *http.Requ
 	h.logger.Info("Registering trip overhead")
 	h.logger.Debug("Registering trip overhead")
 
-	userID, ok := r.Context().Value("user_id").(string)
+	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
 		responses.ErrorJSONResponse(fmt.Errorf("unauthorized action"), http.StatusUnauthorized, w, nil)
 		return
