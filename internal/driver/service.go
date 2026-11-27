@@ -102,7 +102,7 @@ func (s *DriverService) GetDriverLedger(ctx context.Context, driverID int32) ([]
 func (s *DriverService) AddPayrollService(ctx context.Context, driverID int32, req *domain.DriverLedger) error {
 	s.logger.Info("Adding payroll", "driverID", driverID)
 	_, err := s.queries.DriverLedger(ctx, dm_svc_db.DriverLedgerParams{
-		DriverID:      req.DriverID,
+		DriverID:      driverID,
 		EntryType:     req.EntryType,
 		Amount:        req.Amount,
 		RelatedTripID: nil,
@@ -257,7 +257,7 @@ func (s *DriverService) UpdateCarStatus(ctx context.Context, carID int32, carSta
 func (s *DriverService) DeleteCar(ctx context.Context, carID int32) error {
 	s.logger.Info("Deleting car", "carID", carID)
 	return s.queries.DeleteCar(ctx, carID)
-}//<your-app>.up.railway.app/swagger/ 
+}
 
 func (s *DriverService) ChangeCarDriver(ctx context.Context, driverID int32, carID int32) error {
 	s.logger.Info("Changing car driver", "driverID", driverID)
