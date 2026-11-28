@@ -90,6 +90,57 @@ func (h *DriverHandler) UpdateDriver(w http.ResponseWriter, r *http.Request) {
 	responses.SuccessJSONResponse("updated successfully", data, http.StatusOK, w)
 }
 
+func (h *DriverHandler) UploadDriverPicture(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	_, err = h.service.GetDriverDetail(r.Context(), int32(id))
+	if errors.Is(err, ErrDriverNotFound) {
+		responses.ErrorJSONResponse(err, http.StatusNotFound, w, nil)
+		return
+	}
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	// Hard cap on the request body, then parse the multipart form.
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		responses.ErrorJSONResponse(err, http.StatusBadRequest, w, nil)
+		return
+	}
+
+	file, header, err := r.FormFile("picture")
+	if err != nil {
+		responses.ErrorJSONResponse(errors.New("picture file is required"), http.StatusBadRequest, w, nil)
+		return
+	}
+	defer file.Close()
+
+	h.logger.Info("Uploading driver picture", "driver_id", id, "filename", header.Filename, "size", header.Size)
+
+	uploadResult, err := h.cloudinary.Upload.Upload(r.Context(), file, uploader.UploadParams{Folder: "drivers"})
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+	pictureURL := uploadResult.SecureURL
+
+	// Only ProfilePictureUrl is set, so the service keeps every other field as it is.
+	updated, err := h.service.UpdateDriverStatus(r.Context(), int32(id), &domain.Driver{ProfilePictureUrl: &pictureURL})
+	if err != nil {
+		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
+		return
+	}
+
+	data := map[string]any{"id": updated.ID, "profile_picture_url": pictureURL}
+	responses.SuccessJSONResponse("profile picture updated", data, http.StatusOK, w)
+}
+
 func (h *DriverHandler) GetDriverDetail(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(chi.URLParam(r, "id"))
 	if err != nil {
@@ -98,6 +149,11 @@ func (h *DriverHandler) GetDriverDetail(w http.ResponseWriter, r *http.Request) 
 	}
 
 	driver, err := h.service.GetDriverDetail(r.Context(), int32(id))
+	if errors.Is(err, ErrDriverNotFound) {
+		responses.ErrorJSONResponse(err, http.StatusNotFound, w, nil)
+		return
+	}
+
 	if err != nil {
 		responses.ErrorJSONResponse(err, http.StatusInternalServerError, w, nil)
 		return

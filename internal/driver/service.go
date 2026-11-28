@@ -13,9 +13,12 @@ import (
 	"github.com/Robotech-Org/driver-management/internal/domain"
 	"github.com/google/uuid"
 	"github.com/greatcloak/decimal"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+var ErrDriverNotFound = errors.New("driver not found")
 
 type DriverService struct {
 	logger  *slog.Logger
@@ -69,13 +72,17 @@ func (s *DriverService) UpdateDriverStatus(ctx context.Context, driverID int32, 
 	if req.Licenses != "" {
 		existing.LicenseNumber = req.Licenses
 	}
+	if req.ProfilePictureUrl != nil {
+		existing.ProfilePictureUrl = req.ProfilePictureUrl
+	}
 
 	return s.queries.UpdateDriver(ctx, dm_svc_db.UpdateDriverParams{
-		ID:            existing.ID,
-		FirstName:     existing.FirstName,
-		LastName:      existing.LastName,
-		PhoneNumber:   existing.PhoneNumber,
-		LicenseNumber: existing.LicenseNumber,
+		ID:                existing.ID,
+		FirstName:         existing.FirstName,
+		LastName:          existing.LastName,
+		PhoneNumber:       existing.PhoneNumber,
+		LicenseNumber:     existing.LicenseNumber,
+		ProfilePictureUrl: existing.ProfilePictureUrl,
 	})
 }
 
@@ -86,7 +93,16 @@ func (s *DriverService) ListDrivers(ctx context.Context) ([]dm_svc_db.Driver, er
 
 func (s *DriverService) GetDriverDetail(ctx context.Context, driverID int32) (dm_svc_db.GetDriverDetailRow, error) {
 	s.logger.Info("Getting driver detail", "driverID", driverID)
-	return s.queries.GetDriverDetail(ctx, driverID)
+
+	driver, err := s.queries.GetDriverDetail(ctx, driverID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return dm_svc_db.GetDriverDetailRow{}, ErrDriverNotFound
+	}
+	if err != nil {
+		return dm_svc_db.GetDriverDetailRow{}, err
+	}
+
+	return driver, nil
 }
 
 func (s *DriverService) DeleteDriver(ctx context.Context, driverID int32) error {

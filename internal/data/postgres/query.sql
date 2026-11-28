@@ -124,6 +124,7 @@ SET
   last_name     = COALESCE($3, last_name),
   phone_number  = COALESCE($4, phone_number),
   license_number= COALESCE($5, license_number),
+  profile_picture_url = COALESCE($6, profile_picture_url),
   updated_at    = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING *;
@@ -514,3 +515,5 @@ SET
     updated_at = NOW()
 WHERE trip_id = $1 AND expenses_id = $2
 RETURNING *;
+
+ 

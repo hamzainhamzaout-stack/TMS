@@ -1,12 +1,13 @@
 package domain
 
 type Driver struct {
-	ID          int64  `json:"id"`
-	FirstName   string `json:"first_name,omitempty"`
-	LastName    string `json:"last_name,omitempty"`
-	PhoneNumber string `json:"phone_number,omitempty"`
-	Licenses    string `json:"license_number,omitempty"`
-	Status      string `json:"status"`
+	ID                int64   `json:"id"`
+	FirstName         string  `json:"first_name,omitempty"`
+	LastName          string  `json:"last_name,omitempty"`
+	PhoneNumber       string  `json:"phone_number,omitempty"`
+	Licenses          string  `json:"license_number,omitempty"`
+	Status            string  `json:"status"`
+	ProfilePictureUrl *string `json:"profile_picture_url,omitempty"`
 }
 
 type CarStatus string

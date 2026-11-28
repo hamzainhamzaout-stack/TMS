@@ -417,14 +417,15 @@ type Car struct {
 }
 
 type Driver struct {
-	ID            int32            `json:"id"`
-	FirstName     string           `json:"first_name"`
-	LastName      string           `json:"last_name"`
-	PhoneNumber   string           `json:"phone_number"`
-	LicenseNumber string           `json:"license_number"`
-	Status        string           `json:"status"`
-	CreatedAt     pgtype.Timestamp `json:"created_at"`
-	UpdatedAt     pgtype.Timestamp `json:"updated_at"`
+	ID                int32            `json:"id"`
+	FirstName         string           `json:"first_name"`
+	LastName          string           `json:"last_name"`
+	PhoneNumber       string           `json:"phone_number"`
+	LicenseNumber     string           `json:"license_number"`
+	Status            string           `json:"status"`
+	CreatedAt         pgtype.Timestamp `json:"created_at"`
+	UpdatedAt         pgtype.Timestamp `json:"updated_at"`
+	ProfilePictureUrl *string          `json:"profile_picture_url"`
 }
 
 type DriverLedger struct {

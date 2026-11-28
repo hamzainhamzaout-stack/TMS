@@ -131,6 +131,7 @@ func NewRoutes(di *wiring.DependencyContainer) *chi.Mux {
 			r.Post("/", di.DriverHandler.CreateDriver)
 			r.Get("/{id}", di.DriverHandler.GetDriverDetail)
 			r.Patch("/{id}", di.DriverHandler.UpdateDriver)
+			r.Post("/{id}/picture", di.DriverHandler.UploadDriverPicture)
 			r.Delete("/{id}", di.DriverHandler.DeleteDriver)
 			r.Post("/{id}/payroll", di.DriverHandler.AddPayroll)
 			r.Get("/{id}/payroll", di.DriverHandler.GetDriverLedger)

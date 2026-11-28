@@ -112,7 +112,7 @@ func (q *Queries) CreateCar(ctx context.Context, arg CreateCarParams) (Car, erro
 const createDriver = `-- name: CreateDriver :one
 INSERT INTO driver(first_name, last_name, phone_number, license_number)
 VALUES($1, $2, $3, $4)
-RETURNING id, first_name, last_name, phone_number, license_number, status, created_at, updated_at
+RETURNING id, first_name, last_name, phone_number, license_number, status, created_at, updated_at, profile_picture_url
 `
 
 type CreateDriverParams struct {
@@ -139,6 +139,7 @@ func (q *Queries) CreateDriver(ctx context.Context, arg CreateDriverParams) (Dri
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProfilePictureUrl,
 	)
 	return i, err
 }
@@ -608,7 +609,7 @@ func (q *Queries) GetDashboardCounts(ctx context.Context) (GetDashboardCountsRow
 }
 
 const getDriverByID = `-- name: GetDriverByID :one
-SELECT id, first_name, last_name, phone_number, license_number, status, created_at, updated_at
+SELECT id, first_name, last_name, phone_number, license_number, status, created_at, updated_at, profile_picture_url
 FROM driver
 WHERE id = $1
 `
@@ -625,13 +626,14 @@ func (q *Queries) GetDriverByID(ctx context.Context, id int32) (Driver, error) {
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProfilePictureUrl,
 	)
 	return i, err
 }
 
 const getDriverDetail = `-- name: GetDriverDetail :one
 SELECT
-    d.id, d.first_name, d.last_name, d.phone_number, d.license_number, d.status, d.created_at, d.updated_at,
+    d.id, d.first_name, d.last_name, d.phone_number, d.license_number, d.status, d.created_at, d.updated_at, d.profile_picture_url,
     c.license_plate,
     COALESCE(
         JSON_AGG(dl ORDER BY dl.created_at)
@@ -646,16 +648,17 @@ GROUP BY d.id, c.license_plate
 `
 
 type GetDriverDetailRow struct {
-	ID            int32            `json:"id"`
-	FirstName     string           `json:"first_name"`
-	LastName      string           `json:"last_name"`
-	PhoneNumber   string           `json:"phone_number"`
-	LicenseNumber string           `json:"license_number"`
-	Status        string           `json:"status"`
-	CreatedAt     pgtype.Timestamp `json:"created_at"`
-	UpdatedAt     pgtype.Timestamp `json:"updated_at"`
-	LicensePlate  *string          `json:"license_plate"`
-	LedgerEntries interface{}      `json:"ledger_entries"`
+	ID                int32            `json:"id"`
+	FirstName         string           `json:"first_name"`
+	LastName          string           `json:"last_name"`
+	PhoneNumber       string           `json:"phone_number"`
+	LicenseNumber     string           `json:"license_number"`
+	Status            string           `json:"status"`
+	CreatedAt         pgtype.Timestamp `json:"created_at"`
+	UpdatedAt         pgtype.Timestamp `json:"updated_at"`
+	ProfilePictureUrl *string          `json:"profile_picture_url"`
+	LicensePlate      *string          `json:"license_plate"`
+	LedgerEntries     interface{}      `json:"ledger_entries"`
 }
 
 func (q *Queries) GetDriverDetail(ctx context.Context, id int32) (GetDriverDetailRow, error) {
@@ -670,6 +673,7 @@ func (q *Queries) GetDriverDetail(ctx context.Context, id int32) (GetDriverDetai
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProfilePictureUrl,
 		&i.LicensePlate,
 		&i.LedgerEntries,
 	)
@@ -1299,7 +1303,7 @@ func (q *Queries) ListCars(ctx context.Context) ([]Car, error) {
 }
 
 const listDrivers = `-- name: ListDrivers :many
-SELECT id, first_name, last_name, phone_number, license_number, status, created_at, updated_at
+SELECT id, first_name, last_name, phone_number, license_number, status, created_at, updated_at, profile_picture_url
 FROM driver
 `
 
@@ -1321,6 +1325,7 @@ func (q *Queries) ListDrivers(ctx context.Context) ([]Driver, error) {
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ProfilePictureUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -1544,17 +1549,19 @@ SET
   last_name     = COALESCE($3, last_name),
   phone_number  = COALESCE($4, phone_number),
   license_number= COALESCE($5, license_number),
+  profile_picture_url = COALESCE($6, profile_picture_url),
   updated_at    = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, first_name, last_name, phone_number, license_number, status, created_at, updated_at
+RETURNING id, first_name, last_name, phone_number, license_number, status, created_at, updated_at, profile_picture_url
 `
 
 type UpdateDriverParams struct {
-	ID            int32  `json:"id"`
-	FirstName     string `json:"first_name"`
-	LastName      string `json:"last_name"`
-	PhoneNumber   string `json:"phone_number"`
-	LicenseNumber string `json:"license_number"`
+	ID                int32   `json:"id"`
+	FirstName         string  `json:"first_name"`
+	LastName          string  `json:"last_name"`
+	PhoneNumber       string  `json:"phone_number"`
+	LicenseNumber     string  `json:"license_number"`
+	ProfilePictureUrl *string `json:"profile_picture_url"`
 }
 
 func (q *Queries) UpdateDriver(ctx context.Context, arg UpdateDriverParams) (Driver, error) {
@@ -1564,6 +1571,7 @@ func (q *Queries) UpdateDriver(ctx context.Context, arg UpdateDriverParams) (Dri
 		arg.LastName,
 		arg.PhoneNumber,
 		arg.LicenseNumber,
+		arg.ProfilePictureUrl,
 	)
 	var i Driver
 	err := row.Scan(
@@ -1575,6 +1583,7 @@ func (q *Queries) UpdateDriver(ctx context.Context, arg UpdateDriverParams) (Dri
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProfilePictureUrl,
 	)
 	return i, err
 }
